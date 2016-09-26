@@ -15,7 +15,7 @@
 			for (var wi = 0; wi < imgLevers[i].length; wi++) {
 				self.imgs[i][wi] = [];
 				self.lever[i].w += imgLevers[i][wi][0].w;
-				for (var yi = 0; yi < imgLevers[i][wi][yi].length; yi++) {
+				for (var yi = 0; yi < imgLevers[i][wi].length; yi++) {
 					self.imgs[i][wi][yi] = {};
 				}
 			}
@@ -40,11 +40,13 @@
 		self.canvas.width = self.options.fullWidth;
 		self.canvas.height = self.options.fullHeight;
 		var ww, hh;
+		self.containW = $(el).width();
+		self.containH = $(el).height();
 		self.kgb = self.canvas.width / self.canvas.height;
-		containkgb = $(el).width() / $(el).height();
-		self.kgb > containkgb ? (ww = $(el).width() * self.options.initSize, hh = ww / self.kgb) : (hh = $(el).height() * self.options.initSize, ww = hh * self.kgb);
-		self.top = ($(el).height() - hh) / 2;
-		self.left = ($(el).width() - ww) / 2;
+		containkgb = self.containW / self.containH;
+		self.kgb > containkgb ? (ww = self.containW * self.options.initSize, hh = ww / self.kgb) : (hh = self.containH * self.options.initSize, ww = hh * self.kgb);
+		self.top = (self.containH - hh) / 2;
+		self.left = (self.containW - ww) / 2;
 		self.width = ww;
 		self.height = hh;
 		self.setCss();
@@ -66,38 +68,31 @@
 		for (var wi = 0; wi < self.imgLevers[0].length; wi++) {
 			for (var yi = 0; yi < self.imgLevers[0][wi].length; yi++) {
 				(function(wi, yi) {
-					self.lever[0].w += self.imgLevers[0][wi][yi].w;
-					self.lever[0].h += self.imgLevers[0][wi][yi].h;
-					self.imgload(0, wi, yi, function(img) {
-						self.imgs[0][0]
-						self.ctx.drawImage(img, self.imgLevers[0][wi][yi].x, self.imgLevers[0][wi][yi].y, self.imgLevers[0][wi][yi].w, self.imgLevers[0][wi][yi].h);
-					})
+					self.imgload(0, wi, yi);
 				})(wi, yi)
 			}
 		}
 	};
-	cvszoom.prototype.imgload = function(i, wi, yi, done) {
+	cvszoom.prototype.imgload = function(i, wi, yi) {
 		var self = this;
-		if (typeof self.imgs[i][wi][yi].complete != 'undefined' && self.imgs[i][wi][yi].complete != true) {
-			self.imgs[i][wi][yi] = new Image();
-			(function(i) {
+		if ((typeof self.imgs[i][wi][yi].complete == 'undefined') || (self.imgs[i][wi][yi].complete != true)) {
+			//(function(i, wi, yi) {
+				self.imgs[i][wi][yi] = new Image();
 				self.imgs[i][wi][yi].onload = function() {
-					done(this);
+					self.ctx.drawImage(this, self.imgLevers[i][wi][yi].x, self.imgLevers[i][wi][yi].y, self.imgLevers[i][wi][yi].w, self.imgLevers[i][wi][yi].h);
 					self.lever[i].compelte = true;
-					for (var wi = 0; wi < imgLevers[i].length; wi++) {
+					for (var wwi = 0; wwi < self.imgLevers[i].length; wwi++) {
 						if (self.lever[i].compelte == false) break;
-						for (var yi = 0; yi < imgLevers[i][wi][yi].length; yi++) {
-							if (!self.imgs[i][wi][yi].complete) {
+						for (var yyi = 0; yi < self.imgLevers[i][wwi][yyi].length; yyi++) {
+							if (!self.imgs[i][wwi][yyi].complete) {
 								self.lever[i].compelte = false;
 								break;
 							}
 						}
 					}
 				};
-			})(i)
-			self.imgs[i][wi][yi].src = self.imgLevers[i][wi][yi].src;
-		} else {
-			done(self.imgs[i][wi][yi]);
+				self.imgs[i][wi][yi].src = self.imgLevers[i][wi][yi].src;
+			//})(i, wi, yi)
 		}
 	};
 	cvszoom.prototype.setCss = function() {
@@ -135,7 +130,10 @@
 	//缩放、判断瓦片级别变化
 	cvszoom.prototype.floor = function(ScaleNew, center) {
 			var self = this;
-			var c = center || { x: $(self.$element).width() / 2, y: $(self.$element).height() / 2 };
+			var c = center || {
+				x: $(self.$element).width() / 2,
+				y: $(self.$element).height() / 2
+			};
 			self.left = c.x - self.width * ScaleNew * (c.x - self.left) / self.width;
 			self.top = c.y - self.height * ScaleNew * (c.y - self.top) / self.height;
 			self.width = self.width * ScaleNew;
@@ -157,8 +155,13 @@
 				}, 300);
 			}
 		}
+		//判断两个矩形有没有相交
+	cvszoom.prototype.rectTest = function(rect1, rect2) {
+			return rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x && rect1.y < rect2.y + rect2.h && rect1.y + rect1.h > rect2.x;
+		}
 		//绘图
 	cvszoom.prototype.draw = function(leverNew) {
+		var self=this;
 		var allload = true;
 		if (leverNew <= self.curLever) {
 			var i = self.curLever;
@@ -173,66 +176,23 @@
 			}
 			if (allload == true) return;
 		}
-
-		var left = layerwh.w * layerScale / 2 - $container.width() / 2 - layerX; //container，在放大后的layer，上的left
-		var top = layerwh.h * layerScale / 2 - $container.height() / 2 - layerY;
-		var widthClient = $container.width();
-		var heightClient = $container.height();
-		var f = floorLever;
-		var temp = tooljisuan(f);
-		if (typeof(fnew) != "undefined") { //解决layer层大小与floor层不一样大小的问题。
-			var w = temp.ww * temp.wBlockNumF;
-			var h = temp.hh * temp.hBlockNumF;
-			$layer.css({ width: w + 'px', height: h + 'px' });
-		}
-		PreviewMove();
-		var wBlockPx = layerScale * temp.ww;
-		var hBlockPx = layerScale * temp.hh;
-		var image;
-		var src;
-		var alreadyhave = 0;
-		var fij
-		for (var i = 0; i < temp.wBlockNumF; i++) {
-			for (var j = 0; j < temp.hBlockNumF; j++) {
-				if (i * wBlockPx < left + widthClient + 100 && (i + 1) * wBlockPx > left - 100 && j * hBlockPx < top + heightClient + 100 && (j + 1) * hBlockPx > top - 100)
-				//imgLayer[f][i][j].attr('src', imgLayer[f][i][j].attr('data-original')).show();
-				{
-					fij = imgLayer[f][i][j];
-					//console.log(f + ',' + i + ',' + j);
-					src = imgLayer[f][i][j].attr('data-original');
-					for (var k = 0; k < tempimage.length; k++) {
-						alreadyhave = 0;
-						if (tempimage[k].src == src) {
-							alreadyhave = 1;
-							break;
-						}
+		//PreviewMove();
+		var bl = self.options.fullWidth/ self.width;
+		for (var i = 0; i < self.imgLevers.length; i++) {
+			for (var wi = 0; wi < self.imgLevers[i].length; wi++) {
+				for (var yi = 0; yi < self.imgLevers[i][wi][yi].length; yi++) {
+					if (rectTest(self.imgLevers[i][wi][yi], {
+							x: self.left * bl,
+							y: self.top * bl,
+							w: self.containW * bl,
+							h: self.containH * bl
+						})) {
+						self.imgload(i, wi, yi);
 					}
-					(function() {
-						var arg = fij;
-						var src = arg.attr('data-original');
-						if (alreadyhave == 0) {
-							image = new Image();
-							image.onload = function() {
-								for (var k = 0; k < tempimage.length; k++) {
-									if (tempimage[k] == this) {
-										tempimage.splice(k, 1);
-										break;
-									}
-								}
-								arg.attr('src', src);
-								setTimeout(function() { arg.show(); }, 50); //否则会引起safari灰框
-								if (tempimage.length == 0) $layer.css('cursor', 'pointer');
-							};
-							image.src = arg.attr('data-original');
-							$layer.css('cursor', 'progress');
-							tempimage.push(image);
-						}
-					})();
 				}
-				////以上加载提示会引起抖动
 			}
 		}
-		this.ctx.drawImage(imgObject.img, 0, 0, this.canvas.width, this.canvas.height);
+
 	};
 	cvszoom.prototype.destroy = function() {
 		this.canvas.parentNode.removeChild(this.canvas);
@@ -262,7 +222,11 @@ function divide(imgurl, options, done) {
 	// 		return false;
 	// });
 
-	splitBlock({ height: 4200, size: 481200, width: 4800 }, done);
+	splitBlock({
+		height: 4200,
+		size: 481200,
+		width: 4800
+	}, done);
 
 	function splitBlock(data, done) {
 		var maxBlockNum = Math.ceil(data.size / this.diviOptions.blockSize); //最大分块数
@@ -302,8 +266,6 @@ function divide(imgurl, options, done) {
 		levers[0][0][0].src = imgurl + '@' + this.diviOptions.fbl0 + 'h_' + this.diviOptions.fbl0 + 'w_0e_1l.src';
 		levers[0][0][0].x = 0;
 		levers[0][0][0].y = 0;
-		//levers[0][0][0].w = kgb > 1 ? this.diviOptions.fbl0 : this.diviOptions.fbl0 / kgb;
-		//levers[0][0][0].h = kgb < 1 ? this.diviOptions.fbl0 : this.diviOptions.fbl0 * kgb;
 		levers[0][0][0].w = data.width;
 		levers[0][0][0].h = data.height;
 		levers[0][0][0].maxScaleTimes = maxScaleTimes;
