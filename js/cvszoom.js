@@ -1,51 +1,46 @@
 ;
+//create by 栾树崇
+//瓦片图放大效果
 (function($, window, document, undefined) {
 	function cvszoom(el, imgLevels, options) {
 		var self = this;
+		self.Compatibility = false;
 		self.$layer = $(el);
 		self.imgLevels = imgLevels;
-		self.level = [];
-		self.imgs = [];
-		for (var i = 0; i < imgLevels.length; i++) {
-			self.imgs[i] = [];
-			self.level[i] = {};
-			self.level[i].w = 0;
-			self.level[i].h = 0;
-			self.level[i].compelte = false;
-			for (var wi = 0; wi < imgLevels[i].length; wi++) {
-				self.imgs[i][wi] = [];
-				self.level[i].w += imgLevels[i][wi][0].w;
-				for (var yi = 0; yi < imgLevels[i][wi].length; yi++) {
-					self.imgs[i][wi][yi] = {};
-				}
-			}
-			for (var yi = 0; yi < imgLevels[i][0].length; yi++) {
-				self.level[i].h += imgLevels[i][0][yi].h;
-			}
-		}
-		i--;
-		self.LevelMax = i;
 		self.defaults = {
-			'fullWidth': self.level[0].w,
-			'fullHeight': self.level[0].h,
-			'thumbnail': true,
+			'fullWidth': imgLevels[0][0][0].w,
+			'fullHeight': imgLevels[0][0][0].h,
 			'initSize': 0.8, //相对容器的比例
 			'scaleNum': 1.8, //每级相对上一级的单边放大倍数
 			'overScaleTimes': 2, //放大到全分辨率后，可以继续放大的倍数
 			'whiteBorderSize': 100, //图片边缘与容器边缘的最大间隙
+			'thumbnail': true,
+			'thumbnailSize': 160,
 		};
 		self.options = $.extend({}, self.defaults, options);
-
 		//初始化canvas
-		// try {
-		// 	self.canvas = document.createElement("canvas");
-		// 	self.ctx = self.canvas.getContext('2d');
-		// } catch(e) {
-		//	console.log(e);
-			self.Compatibility=true;
+		try {
+			self.canvas = document.createElement("canvas");
+			self.ctx = self.canvas.getContext('2d');
+		} catch (e) {
+			console.log(e);
+			self.Compatibility = true;
 			self.canvas = document.createElement('img');
-			self.canvas.src=imgLevels[0][0][0].src;
-		// }
+			self.canvas.src = imgLevels[0][0][0].originalURL;
+			self.canvas.alt = '您的浏览器不支持canvas，正在直接加载原图...,请您耐心等待';
+		}
+		self.imgs = [];
+		for (var i = 0; i < imgLevels.length; i++) {
+			self.imgs[i] = [];
+			for (var wi = 0; wi < imgLevels[i].length; wi++) {
+				self.imgs[i][wi] = [];
+				for (var yi = 0; yi < imgLevels[i][wi].length; yi++) {
+					self.imgs[i][wi][yi] = {};
+				}
+			}
+		}
+		i--;
+		self.LevelMax = i;
 		self.canvas.width = self.options.fullWidth;
 		self.canvas.height = self.options.fullHeight;
 		var ww, hh;
@@ -67,13 +62,12 @@
 		var maxWH = Math.max(self.options.fullWidth, self.options.fullHeight);
 		self.maxScaleNum = Math.ceil(Math.max(self.options.fullWidth, self.options.fullHeight) / Math.max($(el).width(), $(el).height()) * self.options.overScaleTimes);
 		self.curLevel = 0;
-		self.curLevelAllDraw = false;
+		//self.curLevelAllDraw = false;
 		self.initdraw();
 		self.$layer.append(self.canvas);
 		self.$canvas = $(self.canvas);
 		self.$canvas.css({ '-moz-transform-origin': '0 0', '-webkit-transform-origin': '0 0', '-ms-transform-origin': '0 0', 'transform-origin': '0 0' });
-		self.setCss();
-		self.$layer.on('mousedown', function(e) {
+		self.$canvas.on('mousedown touchstart', function(e) {
 			self.imgMove(e, self);
 		});
 		//滚轮事件
@@ -82,7 +76,228 @@
 			var delta = (e.originalEvent.wheelDelta && (e.originalEvent.wheelDelta > 0 ? 1 : -1)) || (e.originalEvent.detail && (e.originalEvent.detail > 0 ? -1 : 1));
 			delta > 0 ? self.Scale(1.1) : self.Scale(0.9);
 		});
-		self.floorLevelTimeout='undefined';
+		self.$canvas.dblclick(function() {
+			self.Scale(self.options.scaleNum);
+		});
+		self.floorLevelTimeout = 'undefined';
+		//缩略图
+		if (self.options.thumbnail) {
+			var str = '<div class="cvs_thumbnail" >';
+			str += '<div class="shang"></div>';
+			str += '<div class="huidi"></div>';
+			str += '<div class="xia"></div>';
+			str += '<div class="previewbox">';
+			str += '<img src="" draggable="false" />';
+			str += '<div class="brightbox"></div>';
+			str += '<div class="dimbox top"></div>';
+			str += '<div class="dimbox left"></div>';
+			str += '<div class="dimbox right"></div>';
+			str += '<div class="dimbox bottom"></div>';
+			str += '</div>';
+			str += '<span class="btn scalebrightbox"></span>';
+			str += '<span class="btn closeButton">✕</span>';
+			str += '<span class="btn smallButton">-</span>';
+			str += '<span class="btn bigButton">+</span>';
+			str += '</div>';
+			self.$thumbnail = $(str);
+			self.$layer.append(self.$thumbnail);
+			self.$preview = self.$thumbnail.find('.previewbox');
+			self.$scalebrightbox = self.$thumbnail.find('.scalebrightbox');
+			var $brightbox = self.$thumbnail.find('.brightbox');
+			initPreview();
+
+			function initPreview() {
+				self.$thumbnail.css({ width: self.options.thumbnailSize + 'px', height: self.options.thumbnailSize + 'px' });
+				self.$thumbnail.find('.previewbox>img').attr('src', self.imgLevels[0][0][0].src);
+				if (self.kgb > 1) {
+					self.$preview.h = (self.options.thumbnailSize / self.kgb).toFixed(2);
+					self.$thumbnail.find('.previewbox').css({ width: self.options.thumbnailSize + 'px', height: self.$preview.h + 'px' });
+					self.$preview.w = self.options.thumbnailSize;
+					$brightbox.css('width', self.$preview.w + 'px');
+					$brightbox.css('height', self.$preview.h + 'px');
+				} else {
+					self.$preview.w = (self.options.thumbnailSize * self.kgb).toFixed(2);
+					self.$thumbnail.find('.previewbox').css({ width: self.$preview.w + 'px', height: self.options.thumbnailSize + 'px' });
+					self.$preview.h = self.options.thumbnailSize;
+					$brightbox.css('width', self.$preview.w + 'px');
+					$brightbox.css('height', self.$preview.h + 'px');
+				}
+				self.$scalebrightbox.mw = self.options.thumbnailSize - self.$scalebrightbox.width() - 60;
+
+
+			};
+			self.$scalebrightbox.on('mousedown touchstart', function(e) { //放大缩小条
+				if (self.$scalebrightbox.setCapture) {
+					self.$scalebrightbox.setCapture();
+				} else if (window.captureEvents) {
+					window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
+				}
+				var x0 = self.getxy(e).x;
+				$(document).on('mousemove touchmove', function(e) {
+					e.preventDefault();
+					var x1 = self.getxy(e).x;
+					var left = parseFloat(self.$scalebrightbox.css('left')) - 30 + x1 - x0;
+					if (left < 0) left = 0;
+					else if (left > self.$scalebrightbox.mw) left = self.$scalebrightbox.mw;
+					self.$scalebrightbox.css('left', left + 30 + 'px');
+					s = 1 + (self.maxScaleNum - 1) * left / self.$scalebrightbox.mw;
+					self.Scale(s / self.scale);
+					x0 = x1;
+				});
+				//鼠标弹起
+				$(document).on("mouseup touchend", function(e) {
+					e.preventDefault();
+					if (self.$scalebrightbox.releaseCapture) self.$scalebrightbox.releaseCapture();
+					else if (window.captureEvents) {
+						window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
+					}
+					$(document).off('mousemove mouseup touchmove touchend');
+				});
+			});
+			self.$thumbnail.find('.previewbox').on('mousedown touchstart', function(e) {
+				//console.log(e);
+				var bbw = parseFloat($brightbox[0].style.width);
+				var bbh = parseFloat($brightbox[0].style.height);
+				var xy = self.getxy(e);
+				var x0 = xy.x,
+					y0 = xy.y;
+				var $self = $(this);
+				if (self.width < self.containW && self.height < self.containH) return;
+				var thsxy = $self.offset();
+				var left = x0 - thsxy.left - bbw / 2;
+				var top = y0 - thsxy.top - bbh / 2;
+				var oleft = left;
+				var otop = top;
+				//限制白框不出范围
+				self.left = -self.width * left / self.$preview.w;
+				self.top = -self.height * top / self.$preview.h;
+				if (left <= 0) {
+					left = 0;
+					self.left = -self.width * left / self.$preview.w + self.options.whiteBorderSize;
+				} else if (bbw + left >= self.$preview.w) {
+					left = self.$preview.w - bbw;
+					self.left = -self.width * left / self.$preview.w - self.options.whiteBorderSize;
+				}
+				if (top <= 0) {
+					top = 0;
+					self.top = -self.height * top / self.$preview.h + self.options.whiteBorderSize;
+				} else if (bbh + top >= self.$preview.h) {
+					top = self.$preview.h - bbh;
+					self.top = -self.height * top / self.$preview.h - self.options.whiteBorderSize;
+				}
+				$brightbox.css({ top: top + 'px', left: left + 'px' });
+				self.setCss();
+				self.draw();
+				$(document).on('mousemove touchmove', function(e) {
+					e.preventDefault();
+					if (self.width < self.containW && self.height < self.containH) return;
+					var xy = self.getxy(e);
+					var x1 = xy.x,
+						y1 = xy.y;
+					var left = oleft + x1 - x0;
+					var top = otop + y1 - y0;
+					//console.log(x1,x0,y1,y0,left,top);
+					//限制白框不出范围
+
+					if (left <= 0) {
+						left = -1;
+						self.left = self.options.whiteBorderSize;
+					} else if (bbw + left >= self.$preview.w) {
+						left = self.$preview.w - bbw + 1;
+						self.left = -self.width + self.containW - self.options.whiteBorderSize;
+					} else {
+						self.left = -self.width * left / self.$preview.w;
+					}
+					if (top <= 0) {
+						top = -1;
+						self.top = self.options.whiteBorderSize;
+					} else if (bbh + top >= self.$preview.h) {
+						top = self.$preview.h - bbh + 1;
+						self.top = -self.height + self.containH - self.options.whiteBorderSize;
+					} else {
+						self.top = -self.height * top / self.$preview.h;
+					}
+					$brightbox.css({ top: top + 'px', left: left + 'px' });
+					self.setCss();
+					self.draw();
+				});
+				//鼠标弹起
+				$(document).on("mouseup touchend", function(e) {
+					e.preventDefault();
+					if ($brightbox.releaseCapture) $brightbox.releaseCapture();
+					else if (window.captureEvents) {
+						window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
+					}
+					$(document).off('mousemove mouseup touchmove touchend');
+				});
+			});
+
+			self.setThumbnail = function() {
+				scalebrightboxMove();
+				brightboxScale();
+				brightboxMove();
+
+				function scalebrightboxMove() {
+					var left = (self.scale - 1) * self.$scalebrightbox.mw / (self.maxScaleNum - 1);
+					self.$scalebrightbox.css({ left: left + 30 + 'px' });
+					//console.log(left);
+				}
+
+				function brightboxScale() {
+					var PWS = self.containW / self.width;
+					if (PWS > 1) PWS = 1;
+					var PHS = self.containH / self.height;
+					if (PHS > 1) PHS = 1;
+					$('.brightbox').css({ width: self.$preview.w * PWS + 'px', height: self.$preview.h * PHS + 'px' });
+					//console.log(self.$preview.w * PWS,self.$preview.h * PHS);
+				}
+
+				function brightboxMove() {
+					var bbw = parseFloat($brightbox[0].style.width);
+					var bbh = parseFloat($brightbox[0].style.height);
+					var left = -self.$preview.w * self.left / self.width;
+					var top = -self.$preview.h * self.top / self.height;
+					if (left <= 0) left = 0;
+					else if (bbw + left >= self.$preview.w) left = self.$preview.w - bbw;
+					if (top <= 0) top = 0;
+					else if (bbh + top >= self.$preview.h) top = self.$preview.h - bbh;
+					$brightbox.css({ left: left + 'px', top: top + 'px' });
+					//console.log(left,top);
+					DimLayerResize();
+				}
+
+			}
+
+			function DimLayerResize() { //改变其他灰框大小
+				var bbw = parseFloat($brightbox[0].style.width);
+				var bbh = parseFloat($brightbox[0].style.height);
+				var rl = (parseFloat($brightbox.css('left')) + bbw) + 'px';
+				var rt = $brightbox.css('top');
+				var rw = (self.$preview.w - (parseFloat($brightbox.css('left')) + bbw)) + 'px';
+				var rh = $brightbox[0].style.height;
+				var ll = $brightbox.css('left');
+				var bt = (parseFloat($brightbox.css('top')) + bbh) + 'px';
+				var bh = (self.$preview.h - (parseFloat($brightbox.css('top')) + bbh)) + 'px';
+				//console.log(rl, rt, rw, rh, ll, bt, bh);
+				self.$thumbnail.find(".dimbox.top").css({ left: 0, top: 0, width: '100%', height: rt });
+				self.$thumbnail.find(".dimbox.left").css({ left: 0, top: rt, width: ll, height: rh });
+				self.$thumbnail.find(".dimbox.right").css({ left: rl, top: rt, width: rw, height: rh });
+				self.$thumbnail.find(".dimbox.bottom").css({ left: 0, top: bt, width: '100%', height: bh });
+			}
+
+			$('.bigButton').click(function() {
+				self.Scale(self.options.scaleNum);
+			});
+			$('.smallButton').click(function() {
+				self.Scale(1 / self.options.scaleNum)
+			});
+			$('.closeButton').click(function() {
+				self.destroy();
+			});
+			//以上是缩略图视窗相关
+		}
+		self.setCss();
+
 	}
 	cvszoom.prototype.initdraw = function() {
 		var self = this;
@@ -96,24 +311,15 @@
 	};
 	cvszoom.prototype.imgload = function(i, wi, yi) {
 		var self = this;
+		if (self.Compatibility) return;
 		if (typeof self.imgs[i][wi][yi].complete == 'undefined') {
 			self.imgs[i][wi][yi] = new Image();
 			self.imgs[i][wi][yi].onload = function() {
-				if(i>=self.curLevel && !self.Compatibility)
+				if (i >= self.curLevel)
 					self.ctx.drawImage(this, self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
-				// self.level[i].compelte = true;
-				// for (var wwi = 0; wwi < self.imgLevels[i].length; wwi++) {
-				// 	if (self.level[i].compelte == false) break;
-				// 	for (var yyi = 0; yi < self.imgLevels[i][wwi][yyi].length; yyi++) {
-				// 		if (!self.imgs[i][wwi][yyi].complete) {
-				// 			self.level[i].compelte = false;
-				// 			break;
-				// 		}
-				// 	}
-				// }
 			};
 			self.imgs[i][wi][yi].src = self.imgLevels[i][wi][yi].src;
-		} else if(self.imgs[i][wi][yi].complete==true) {
+		} else if (self.imgs[i][wi][yi].complete == true) {
 			self.imgs[i][wi][yi].onload();
 		}
 	};
@@ -136,11 +342,16 @@
 			var temp = self.height - self.containH + self.options.whiteBorderSize;
 			self.top > self.options.whiteBorderSize ? self.top = self.options.whiteBorderSize : (self.top < -temp ? self.top = -temp : 1);
 		}
-		// self.canvas.style.width = self.width + 'px';
-		// self.canvas.style.height = self.height + 'px';
-		// self.canvas.style.top = self.top + 'px';
-		// self.canvas.style.left = self.left + 'px';
-		transform(self.$canvas, 'matrix(' + self.width / self.options.fullWidth + ',0,0,' + self.height / self.options.fullHeight + ',' + self.left + ',' + self.top + ')');
+
+		if (!self.Compatibility) {
+			transform(self.$canvas, 'matrix(' + self.width / self.options.fullWidth + ',0,0,' + self.height / self.options.fullHeight + ',' + self.left + ',' + self.top + ')');
+		} else {
+			self.canvas.style.width = self.width + 'px';
+			self.canvas.style.height = self.height + 'px';
+			self.canvas.style.top = self.top + 'px';
+			self.canvas.style.left = self.left + 'px';
+		}
+		//console.log(self.left,self.top,self.width,self.height);
 
 		function transform($elem, str) {
 			$elem.css('transform', str);
@@ -148,6 +359,8 @@
 			$elem.css('-webkit-transform', str);
 			$elem.css('-moz-transform', str);
 		}
+
+		if(self.thumbnail)self.setThumbnail();
 	};
 
 	//缩放、判断瓦片级别变化
@@ -162,19 +375,18 @@
 			self.top = c.y - self.height * ScaleNew * (c.y - self.top) / self.height;
 			self.width = self.width * ScaleNew;
 			self.height = self.height * ScaleNew;
-			self.setCss();
 			self.scale = self.scale * ScaleNew;
+			self.setCss();
 			var LevelNew = Math.round(Math.log(self.scale) / Math.log(self.options.scaleNum));
-			if (LevelNew != self.curLevel) {
-				if (LevelNew > self.LevelMax) LevelNew = self.LevelMax;
-				if(typeof self.floorLevelTimeout!='undefined'){
-					clearTimeout(self.floorLevelTimeout);
-					self.floorLevelTimeout='undefined';
-				}
-				self.floorLevelTimeout = setTimeout(function() {
-					self.draw(LevelNew);
-				}, 300);
+			if (LevelNew > self.LevelMax) LevelNew = self.LevelMax;
+			else if (LevelNew < 0) LevelNew = 0;
+			if (typeof self.floorLevelTimeout != 'undefined') {
+				clearTimeout(self.floorLevelTimeout);
+				self.floorLevelTimeout = 'undefined';
 			}
+			self.floorLevelTimeout = setTimeout(function() {
+				self.draw(LevelNew);
+			}, 300); //解决连续变级太快，浪费流量读取低级图层的问题
 		}
 		//判断两个矩形有没有相交
 	cvszoom.prototype.rectTest = function(rect1, rect2) {
@@ -183,44 +395,43 @@
 		//绘图
 	cvszoom.prototype.draw = function(LevelNew) {
 		var self = this;
-		var allLoad = true;
+		// var allLoad = true;
 		var LN = LevelNew || self.curLevel;
 		//放大后的获取全部瓦片后不再向下级draw瓦片，但缩小后效果并不好
-		if (LN <= self.curLevel) {
-			if (self.curLevelAllDraw) return; //当前级别全部draw,缩小不变
-			var i = self.curLevel;
-			for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
-				if (allLoad == false) break;
-				for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
-					if (!self.imgs[i][wi][yi].complete) {
-						allLoad = false;
-						break;
-					}
-				}
-			}
-			if (allLoad == true) {
-				for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
-					for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
-						self.ctx.drawImage(self.imgs[i][wi][yi], self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
-					}
-				}
-				self.curLevelAllDraw = true;
-				return;
-			}
-		} 
+		// if (LN <= self.curLevel) {
+		// 	if (self.curLevelAllDraw) return; //当前级别全部draw,缩小不变
+		// 	var i = self.curLevel;
+		// 	for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
+		// 		if (allLoad == false) break;
+		// 		for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
+		// 			if (!self.imgs[i][wi][yi].complete) {
+		// 				allLoad = false;
+		// 				break;
+		// 			}
+		// 		}
+		// 	}
+		// 	if (allLoad == true) {
+		// 		for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
+		// 			for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
+		// 				self.ctx.drawImage(self.imgs[i][wi][yi], self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
+		// 			}
+		// 		}
+		// 		self.curLevelAllDraw = true;
+		// 		return;
+		// 	}
+		// }
 		var bl = self.options.fullWidth / self.width;
-		var i = LN;
 		self.curLevel = LN;
-		for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
-			for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
-				if (self.rectTest(self.imgLevels[i][wi][yi], {
+		for (var wi = 0; wi < self.imgLevels[LN].length; wi++) {
+			for (var yi = 0; yi < self.imgLevels[LN][wi].length; yi++) {
+				if (self.rectTest(self.imgLevels[LN][wi][yi], {
 						x: -self.left * bl,
 						y: -self.top * bl,
 						w: self.containW * bl,
 						h: self.containH * bl
 					})) {
-					self.imgload(i, wi, yi);
-					self.curLevelAllDraw=false;
+					self.imgload(LN, wi, yi);
+					// self.curLevelAllDraw = false;
 				}
 			}
 		}
@@ -230,39 +441,62 @@
 		this.setCapture ? this.setCapture() : window.captureEvents && window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
 		if (typeof(vInterval) != "undefined")
 			clearInterval(vInterval);
-		//鼠标mousedown时的坐标；
-		var x0 = e.clientX,
-			y0 = e.clientY;
-		//console.log(x0+","+y0+"|");
-		var x1 = x0,
-			y1 = y0,
-			x00 = x0,
-			y00 = y0;
-		var starttime = new Date().getTime();
-
+		if (e.originalEvent.touches !== undefined && e.originalEvent.touches.length == 2) {
+			var touchs = e.originalEvent.touches;
+			var x00 = touchs[0].clientX;
+			var y00 = touchs[0].clientY;
+			var x10 = touchs[1].clientX;
+			var y10 = touchs[1].clientY;
+			var dis = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
+			var oscale = self.scale;
+		} else {
+			//鼠标mousedown时的坐标；
+			var xy = self.getxy(e);
+			var x0 = xy.x,
+				y0 = xy.y;
+			//console.log(x0+","+y0+"|");
+			var x1 = x0,
+				y1 = y0,
+				ox0 = x0,
+				oy0 = y0;
+			var starttime = new Date().getTime();
+		}
 		//鼠标移动
-		$(document).on('mousemove', function(e) {
+		$(document).on('mousemove touchmove', function(e) {
 			e.preventDefault();
-			//不断的获取mousemove的坐标值
-			x1 = e.clientX;
-			y1 = e.clientY;
-			self.left = self.left + x1 - x0;
-			self.top = self.top + y1 - y0;
-			self.setCss();
-			self.draw();
-			x0 = x1;
-			y0 = y1;
+			if (e.originalEvent.touches !== undefined && e.originalEvent.touches.length == 2) {
+				var touchs = e.originalEvent.touches;
+				x00 = touchs[0].clientX;
+				y00 = touchs[0].clientY;
+				x10 = touchs[1].clientX;
+				y10 = touchs[1].clientY;
+				var dis2 = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
+				self.Scale(oscale * dis2 / dis / self.scale);
+			} else {
+				//不断的获取mousemove的坐标值
+				var xy = self.getxy(e);
+				var x1 = xy.x,
+					y1 = xy.y;
+				self.left = self.left + x1 - x0;
+				self.top = self.top + y1 - y0;
+				debugshow(self.left,true);
+				self.setCss();
+				self.draw();
+				x0 = x1;
+				y0 = y1;
+			}
+
 		});
 		//鼠标弹起
-		$(document).on("mouseup", function(e) {
+		$(document).on("mouseup touchend", function(e) {
 			//拖拽加速度
 			var stoptime = new Date().getTime();
-			var v = Math.abs(Math.round(Math.sqrt((x0 - x00) * (x0 - x00) + (y0 - y00) * (y0 - y00)))) / (stoptime - starttime);
+			var v = Math.abs(Math.round(Math.sqrt((x0 - ox0) * (x0 - ox0) + (y0 - oy0) * (y0 - oy0)))) / (stoptime - starttime);
 			if (v > 2) {
 				//console.log(v);
 				//console.log((layerX + x0 - x00) + ',' + (layerY + y0 - y00));
-				vx = (x0 - x00) / (stoptime - starttime);
-				vy = (y0 - y00) / (stoptime - starttime);
+				vx = (x0 - ox0) / (stoptime - starttime);
+				vy = (y0 - oy0) / (stoptime - starttime);
 				v = v / 2;
 				vx = vx / 2;
 				vy = vy / 2;
@@ -294,12 +528,44 @@
 				window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
 			}
 			e.preventDefault();
-			$(document).off('mousemove mouseup');
+			$(document).off('mousemove mouseup touchmove touchend');
 		});
 	};
 	cvszoom.prototype.destroy = function() {
-		this.canvas.parentNode.removeChild(this.canvas);
-		return delete this;
+		var self = this;
+		self.$layer.off('mousewheel DOMMouseScroll');
+		self.$canvas.remove();
+		if (self.options.thumbnail) self.$thumbnail.remove();
+		self.closed();
+		delete self;
+	}
+	cvszoom.prototype.closed = function() {
+		console.log('closed');
+	}
+	cvszoom.prototype.getxy = function(event) {
+		if (event.originalEvent !== undefined)
+			event = event.originalEvent;
+		if (event.touches !== undefined) {
+			return {
+				x: event.touches[0].clientX,
+				y: event.touches[0].clientY
+			};
+		}
+
+		if (event.touches === undefined) {
+			if (event.clientX !== undefined) {
+				return {
+					x: event.clientX,
+					y: event.clientY
+				};
+			} else if (event.pageX !== undefined) {
+				return {
+					x: event.pageX,
+					y: event.pageY
+				};
+			}
+
+		}
 	}
 	$.fn.cvszoom = function(imgurl, options) {
 		var t = new cvszoom(this, imgurl, options);
@@ -324,11 +590,16 @@ function divide(imgurl, options, done) {
 	// 	} else
 	// 		return false;
 	// });
+	// splitBlock({
+	// 	height: 804,
+	// 	size: 6492450,
+	// 	width: 18893
+	// }, done);
 
 	splitBlock({
-		height: 804,
-		size: 6492450,
-		width: 18893
+		height: 2858,
+		size: 5149126,
+		width: 2834
 	}, done);
 
 	function splitBlock(data, done) {
@@ -341,10 +612,10 @@ function divide(imgurl, options, done) {
 		var wDh = data.width > data.height ? true : false; //宽大于高
 		var hbn; //高，当前级别块数
 		var wbn; //宽，当前级别块数
+		hbn = Math.floor(Math.sqrt(maxBlockNum / kgb)); //高，当前级别块数
 		for (var i = maxScaleTimes; i >= 1; i--) {
 			Levels[i] = [];
 			var p = Math.ceil(100 / (Math.pow(1.8, maxScaleTimes - i)));
-			hbn = Math.round(Math.sqrt(maxBlockNum / kgb)); //高，当前级别块数
 			hbn < 1 ? hbn = 1 : 1;
 			wbn = hbn * kgb; //宽，当前级别块数
 			wbn < 1 ? wbn = 1 : 1;
@@ -369,6 +640,7 @@ function divide(imgurl, options, done) {
 
 				}
 			}
+			hbn = Math.floor(hbn / this.diviOptions.scaleNum);
 		}
 		Levels[0] = [];
 		Levels[0][0] = [];
@@ -379,12 +651,23 @@ function divide(imgurl, options, done) {
 		Levels[0][0][0].w = data.width;
 		Levels[0][0][0].h = data.height;
 		Levels[0][0][0].maxScaleTimes = maxScaleTimes;
-		Levels[0][0][0].originalURL = maxScaleTimes;
+		Levels[0][0][0].originalURL = imgurl;
 		done(Levels);
 	}
 
 }
-divide('https://cdn.ywart.com/yw/20160902133828342599863b1.jpg', null, function(data) {
+//https://cdn.ywart.com/yw/20160510133408212f99ee8d6.jpg
+// divide('https://cdn.ywart.com/yw/20160902133828342599863b1.jpg', null, function(data) {
+// 	console.log(data)
+// 	window.temp = $('#contain').cvszoom(data);
+// 	window.temp.closed = function() {
+// 		console.log('dddddddddd');
+// 	}
+// });
+divide('https://cdn.ywart.com/yw/20160510133408212f99ee8d6.jpg', null, function(data) {
 	console.log(data)
-	window.temp = $('#contain').cvszoom(data);
+	window.temp = $('#contain').cvszoom(data,{thumbnail:false});
+	window.temp.closed = function() {
+		console.log('dddddddddd');
+	}
 });
