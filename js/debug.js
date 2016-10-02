@@ -5,7 +5,7 @@ debugdiv.style.color='white';
 debugdiv.style.maxHeight='50%';
 debugdiv.style.maxWidth='50%';
 debugdiv.style.minWidth='20%';
-debugdiv.style.overflow='scroll';
+debugdiv.style.overflow='auto';
 document.body.appendChild(debugdiv);
 function debugshow(v,isnew){
 	var p=document.createElement('p');

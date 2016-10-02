@@ -1,6 +1,13 @@
 ;
 //create by 栾树崇
 //瓦片图放大效果
+//带缩略图定位效果
+//自知应鼠标和触摸设备
+//双击放大，滚轮缩放
+//拖动动量加速度，快速拖动后会继续运动
+//divide为阿里云图片服务分片器
+
+
 (function($, window, document, undefined) {
 	function cvszoom(el, imgLevels, options) {
 		var self = this;
@@ -12,9 +19,9 @@
 			'fullHeight': imgLevels[0][0][0].h,
 			'initSize': 0.8, //相对容器的比例
 			'scaleNum': 1.8, //每级相对上一级的单边放大倍数
-			'overScaleTimes': 2, //放大到全分辨率后，可以继续放大的倍数
+			'overScaleTimes': 3, //放大到全分辨率后，可以继续放大的倍数
 			'whiteBorderSize': 100, //图片边缘与容器边缘的最大间隙
-			'thumbnail': true,
+			'thumbnail': true,//是否显示缩略图
 			'thumbnailSize': 160,
 		};
 		self.options = $.extend({}, self.defaults, options);
@@ -27,7 +34,7 @@
 			self.Compatibility = true;
 			self.canvas = document.createElement('img');
 			self.canvas.src = imgLevels[0][0][0].originalURL;
-			self.canvas.alt = '您的浏览器不支持canvas，正在直接加载原图...,请您耐心等待';
+			alert('您的浏览器版本太低，不支持canvas，将直接加载原图...,请您耐心等待');
 		}
 		self.imgs = [];
 		for (var i = 0; i < imgLevels.length; i++) {
@@ -60,7 +67,7 @@
 
 		self.scale = 1;
 		var maxWH = Math.max(self.options.fullWidth, self.options.fullHeight);
-		self.maxScaleNum = Math.ceil(Math.max(self.options.fullWidth, self.options.fullHeight) / Math.max($(el).width(), $(el).height()) * self.options.overScaleTimes);
+		self.maxScaleNum = Math.ceil(Math.max(self.options.fullWidth/self.containW, self.options.fullHeight/self.containH) * self.options.overScaleTimes);
 		self.curLevel = 0;
 		//self.curLevelAllDraw = false;
 		self.initdraw();
@@ -353,10 +360,13 @@
 		if (self.Compatibility) return;
 		if (typeof self.imgs[i][wi][yi].complete == 'undefined') {
 			self.imgs[i][wi][yi] = new Image();
+			self.imgs[i][wi][yi].isdrawed=false;
 			self.imgs[i][wi][yi].onload = function() {
-				if (i >= self.curLevel)
-					self.ctx.drawImage(this, self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
-			};
+					if (i != self.curLevel || i==self.curLevel && this.isdrawed==false){
+						self.ctx.drawImage(this, self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
+						this.isdrawed=true;
+					}
+				};
 			self.imgs[i][wi][yi].src = self.imgLevels[i][wi][yi].src;
 		} else if (self.imgs[i][wi][yi].complete == true) {
 			self.imgs[i][wi][yi].onload();
@@ -484,7 +494,6 @@
 		var x00,y00,x10,y10,dis;
 		if (e.originalEvent.touches !== undefined && e.originalEvent.targetTouches.length == 2) {
 			var touchs = e.originalEvent.targetTouches;
-			debugshow(touchs[0].clientX,true);
 			x00 = touchs[0].clientX;
 			y00 = touchs[0].clientY;
 			x10 = touchs[1].clientX;
@@ -493,7 +502,6 @@
 		} else {
 			//鼠标mousedown时的坐标；
 			var xy = self.getxy(e);
-		    debugshow(JSON.stringify(xy));
 			var x0 = xy.x,
 				y0 = xy.y;
 			//console.log(x0+","+y0+"|");
@@ -508,19 +516,16 @@
 			e.preventDefault();
 			if (e.originalEvent.touches !== undefined && e.originalEvent.targetTouches.length == 2) {
 				var touchs = e.originalEvent.targetTouches;
-			debugshow(touchs[0].clientX,true);
 				var dis = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
 				x00 = touchs[0].clientX;
 				y00 = touchs[0].clientY;
 				x10 = touchs[1].clientX;
 				y10 = touchs[1].clientY;
 				var dis2 = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
-			debugshow(dis2+','+dis);
 				dis2>dis?self.Scale(1.1):self.Scale(0.9);
 			} else {
 				//不断的获取mousemove的坐标值
 				var xy = self.getxy(e);
-		    debugshow(JSON.stringify(xy));
 				var x1 = xy.x,
 					y1 = xy.y;
 				self.left = self.left + x1 - x0;
