@@ -6,9 +6,10 @@
 //自知应鼠标和触摸设备
 //双击放大，滚轮缩放
 //拖动动量加速度，快速拖动后会继续运动
-//divide为阿里云图片服务分片器
+//splitBlock为阿里云图片服务分片器
 
 
+$('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;color:red;font-size:30px;top:0;left:0;"></p');
 (function ($, window, document, undefined) {
     $.fn.cvszoom = function (imgLevels, options) {
         var t = new cvszoom(this, imgLevels, options);
@@ -104,6 +105,42 @@
         self.$canvas.on('mousedown touchstart', function (e) {
             self.imgMove(e, self);
         });
+        self.$layer.on('touchstart', function (ev) {
+            var touchs = ev.originalEvent.touches;
+            if (touchs.length != 2) return;
+            ev.preventDefault();
+            var x00 = touchs[0].clientX;
+            var y00 = touchs[0].clientY;
+            var x10 = touchs[1].clientX;
+            var y10 = touchs[1].clientY;
+            var dis = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
+            //$('#debugshow').html("");
+            //$('#debugshow').html(1);
+            self.$layer.off('touchmove').on('touchmove', function (ev) {
+                ev.preventDefault();
+                var touchs = ev.originalEvent.touches;
+                if (touchs.length != 2) {
+                    self.$layer.off('touchmove');
+                    return;
+                }
+                x00 = touchs[0].clientX;
+                y00 = touchs[0].clientY;
+                x10 = touchs[1].clientX;
+                y10 = touchs[1].clientY;
+                var dis2 = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
+                if (dis2 - dis > 2) {
+                    self.Scale(1.05);
+                    dis = dis2;
+                } else if (dis2 - dis < -2) {
+                    self.Scale(0.93);
+                    dis = dis2;
+                }
+            });
+            self.$layer.on('touchend', function (ev) {
+                ev.preventDefault();
+                self.$layer.off('touchmove touchend');
+            });
+        });
         //滚轮事件
         self.$layer.on('mousewheel DOMMouseScroll', function (e) {
             e.preventDefault();
@@ -120,6 +157,9 @@
             else
                 self.Scale(self.options.scaleNum);
         });
+        window.onorientationchange = function(){
+            setTimeout(function () { self.resize(self); }, 100);
+        }
         self.floorLevelTimeout = 'undefined';
         //缩略图
         if (self.options.thumbnail) {
@@ -169,9 +209,9 @@
             };
             self.$thumbnail.find('.shang').on('mousedown touchstart', function (e) { //放大缩小条
                 // if (self.$scalebrightbox.setCapture) {
-                // 	self.$scalebrightbox.setCapture();
+                //  self.$scalebrightbox.setCapture();
                 // } else if (window.captureEvents) {
-                // 	window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
+                //  window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
                 // }
                 e.preventDefault();
                 var xy = self.getxy(e);
@@ -193,7 +233,7 @@
                     e.preventDefault();
                     // if (self.$scalebrightbox.releaseCapture) self.$scalebrightbox.releaseCapture();
                     // else if (window.captureEvents) {
-                    // 	window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
+                    //  window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
                     // }
                     $(document).off('mousemove mouseup touchmove touchend');
                 });
@@ -240,7 +280,7 @@
                 var bbh = parseFloat($brightbox[0].style.height);
                 var xy = self.getxy(e);
                 var x0 = xy.x,
-					y0 = xy.y;
+                    y0 = xy.y;
                 var $self = $(this);
                 if (self.width < self.containW && self.height < self.containH) return;
                 var thsxy = $self.offset();
@@ -273,7 +313,7 @@
                     if (self.width < self.containW && self.height < self.containH) return;
                     var xy = self.getxy(e);
                     var x1 = xy.x,
-						y1 = xy.y;
+                        y1 = xy.y;
                     var left = oleft + x1 - x0;
                     var top = otop + y1 - y0;
                     //console.log(x1,x0,y1,y0,left,top);
@@ -462,8 +502,8 @@
         var self = this;
         self.scale * ScaleNew > self.maxScaleNum ? ScaleNew = self.maxScaleNum / self.scale : (self.scale * ScaleNew < 1 ? ScaleNew = 1 / self.scale : 1);
         var c = center || {
-            x: self.$layer.width() / 2,
-            y: self.$layer.height() / 2
+            x: self.containW / 2,
+            y: self.containH / 2
         };
         self.left = c.x - self.width * ScaleNew * (c.x - self.left) / self.width;
         self.top = c.y - self.height * ScaleNew * (c.y - self.top) / self.height;
@@ -492,26 +532,26 @@
         // var allLoad = true;
         //放大后的获取全部瓦片后不再向下级draw瓦片，但缩小后效果并不好
         // if (LN <= self.curLevel) {
-        // 	if (self.curLevelAllDraw) return; //当前级别全部draw,缩小不变
-        // 	var i = self.curLevel;
-        // 	for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
-        // 		if (allLoad == false) break;
-        // 		for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
-        // 			if (!self.imgs[i][wi][yi].complete) {
-        // 				allLoad = false;
-        // 				break;
-        // 			}
-        // 		}
-        // 	}
-        // 	if (allLoad == true) {
-        // 		for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
-        // 			for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
-        // 				self.ctx.drawImage(self.imgs[i][wi][yi], self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
-        // 			}
-        // 		}
-        // 		self.curLevelAllDraw = true;
-        // 		return;
-        // 	}
+        //  if (self.curLevelAllDraw) return; //当前级别全部draw,缩小不变
+        //  var i = self.curLevel;
+        //  for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
+        //      if (allLoad == false) break;
+        //      for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
+        //          if (!self.imgs[i][wi][yi].complete) {
+        //              allLoad = false;
+        //              break;
+        //          }
+        //      }
+        //  }
+        //  if (allLoad == true) {
+        //      for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
+        //          for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
+        //              self.ctx.drawImage(self.imgs[i][wi][yi], self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
+        //          }
+        //      }
+        //      self.curLevelAllDraw = true;
+        //      return;
+        //  }
         // }
         //层级变化，清空已draw标识
         if (LevelNew && LevelNew != self.curLevel) {
@@ -546,56 +586,42 @@
             clearInterval(vInterval);
             vInterval = "undefined";
         }
-        var x00, y00, x10, y10, dis;
-        if (typeof e.originalEvent.touches !== 'undefined' && e.originalEvent.targetTouches.length == 2) {
-            var touchs = e.originalEvent.targetTouches;
-            x00 = touchs[0].clientX;
-            y00 = touchs[0].clientY;
-            x10 = touchs[1].clientX;
-            y10 = touchs[1].clientY;
-            dis = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
-        } else {
-            //鼠标mousedown时的坐标；
-            var xy = self.getxy(e);
-            var x0 = xy.x,
-				y0 = xy.y;
-            //console.log(x0+","+y0+"|");
-            var x1 = x0,
-				y1 = y0,
-				ox0 = x0,
-				oy0 = y0;
-            var starttime = new Date().getTime();
+        if (typeof e.originalEvent.touches !== 'undefined' && e.originalEvent.touches.length > 1) {
+            $(document).off('touchmove touchend');
+            return;
         }
+        //鼠标mousedown时的坐标；
+        var xy = self.getxy(e);
+        var x0 = xy.x,
+            y0 = xy.y;
+        //console.log(x0+","+y0+"|");
+        var x1 = x0,
+            y1 = y0,
+            ox0 = x0,
+            oy0 = y0;
+        var starttime = new Date().getTime();
+        //$('#debugshow').html("");
+        //$('#debugshow').html(e.originalEvent.touches.length);
         //鼠标移动
-        $(document).off('mousemove touchmove').on('mousemove touchmove', function (e) {
+        $(document).on('mousemove touchmove', function (e) {
+
             e.preventDefault();
-            if (typeof e.originalEvent.touches !== 'undefined' && e.originalEvent.targetTouches.length == 2) {
-                var touchs = e.originalEvent.targetTouches;
-                var dis = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
-                x00 = touchs[0].clientX;
-                y00 = touchs[0].clientY;
-                x10 = touchs[1].clientX;
-                y10 = touchs[1].clientY;
-                var dis2 = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
-                dis2 > dis ? self.Scale(1.05) : self.Scale(0.95);
-                //self.Scale(dis2 / dis);
-            } else {
-                //不断的获取mousemove的坐标值
-                var xy = self.getxy(e);
-                var x1 = xy.x,
-					y1 = xy.y;
-                self.left = self.left + x1 - x0;
-                self.top = self.top + y1 - y0;
-                self.setCss();
-                self.draw();
-                x0 = x1;
-                y0 = y1;
-            }
+            //不断的获取mousemove的坐标值
+            var xy = self.getxy(e);
+            var x1 = xy.x,
+                y1 = xy.y;
+            self.left = self.left + x1 - x0;
+            self.top = self.top + y1 - y0;
+            self.setCss();
+            self.draw();
+            x0 = x1;
+            y0 = y1;
 
         });
         //鼠标弹起
-        $(document).off("mouseup touchend").on("mouseup touchend", function (e) {
+        $(document).on("mouseup touchend", function (e) {
             //拖拽加速度
+            e.preventDefault();
             var stoptime = new Date().getTime();
             var v = Math.abs(Math.round(Math.sqrt((x0 - ox0) * (x0 - ox0) + (y0 - oy0) * (y0 - oy0)))) / (stoptime - starttime);
             if (v > 2) {
@@ -607,7 +633,7 @@
                 vx = vx / 2;
                 vy = vy / 2;
                 var i = 0,
-					max = 10;
+                    max = 10;
                 var a = v / max;
                 ax = Math.sqrt(a * a * vx * vx / v / v);
                 ay = Math.sqrt(a * a * vy * vy / v / v);
@@ -633,10 +659,26 @@
             if (self.$layer.releaseCapture) { self.$layer.releaseCapture(); } else if (window.captureEvents) {
                 window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
             }
-            e.preventDefault();
             $(document).off('mousemove mouseup touchmove touchend');
+            flag = false;
         });
     };
+    cvszoom.prototype.resize = function (self) {
+        if (self.options.mode == 'img') {
+            var newW = self.$layer.width();
+            var newH = self.$layer.height();
+            var bl=self.containW / newW;
+            self.width = self.width * bl;
+            self.height = self.height * bl;
+            self.left = self.left + (newW - self.containW) / 2 - (self.width - self.width / bl) / 2;
+            self.top = self.top + (newH - self.containH) / 2 - (self.height - self.height / bl) / 2;
+            self.containW = newW //容器宽
+            self.containH = newH; //容器高
+            self.setCss();
+            self.draw();
+        } else {
+        }
+    }
     cvszoom.prototype.destroy = function () {
         var self = this;
         self.$layer.off('mousedown touchstart mousewheel DOMMouseScroll');
@@ -675,18 +717,6 @@
         }
     }
 })(jQuery, window, document);
-
-// splitBlock({
-// 	height: 804,
-// 	size: 6492450,
-// 	width: 18893
-// }, done);
-
-// splitBlock({
-// 	height: 2858,
-// 	size: 5149126,
-// 	width: 2834
-// }, done);
 
 function splitBlock(imgurl, data, options, done) {
     //针对阿里云图片服务的分层切片器
@@ -754,18 +784,38 @@ function splitBlock(imgurl, data, options, done) {
     return Levels;
     done && done(Levels);
 }
-//https://cdn.ywart.com/yw/20160510133408212f99ee8d6.jpg
+// splitBlock({
+//  height: 804,
+//  size: 6492450,
+//  width: 18893
+// }, done);
 // divide('https://cdn.ywart.com/yw/20160902133828342599863b1.jpg', null, function(data) {
-// 	console.log(data)
-// 	window.temp = $('#contain').cvszoom(data);
-// 	window.temp.closed = function() {
-// 		console.log('dddddddddd');
-// 	}
+//  console.log(data)
+//  window.temp = $('#contain').cvszoom(data);
+//  window.temp.closed = function() {
+//      console.log('dddddddddd');
+//  }
 // // });
+
+// splitBlock({
+//  height: 2858,
+//  size: 5149126,
+//  width: 2834
+// }, done);
 //divide('https://cdn.ywart.com/yw/20160510133408212f99ee8d6.jpg', null, function(data) {
-//	console.log(data)
-//	window.temp = $('#contain').cvszoom(data,{thumbnail:true});
-//	window.temp.closed = function() {
-//		console.log('dddddddddd');
-//	}
+//  console.log(data)
+//  window.temp = $('#contain').cvszoom(data,{thumbnail:true});
+//  window.temp.closed = function() {
+//      console.log('dddddddddd');
+//  }
 //});
+
+//<script type="text/javascript">
+//    var $container = $('body');
+//$container.css('width', document.documentElement.clientWidth + 'px').css('height', document.documentElement.clientHeight + 'px');
+//var imgurl = "https://cdn.ywart.com/yw/" + location.href.substring(location.href.lastIndexOf('?') + 1)
+//$.get(imgurl + '@@info', function (data) {
+//    var d = splitBlock(imgurl, data, { fbl0: 500, src000: imgurl + '_small01' });
+//    var temp=$container.cvszoom(d, { thumbnail: false });
+//});
+//</script>
