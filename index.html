@@ -13,6 +13,16 @@
     <script type="text/javascript" src="js/debug.js"></script>
     <script type="text/javascript" src="js/jquery-2.2.3.min.js"></script>
     <script type="text/javascript" src="js/cvszoom.js"></script>
+    <script type="text/javascript">
+    	
+		divide('https://cdn.ywart.com/yw/20160510133408212f99ee8d6.jpg', null, function(data) {
+			console.log(data)
+			window.temp = $('#contain').cvszoom(data,{thumbnail:true});
+			window.temp.closed = function() {
+				console.log('dddddddddd');
+			}
+		});
+    </script>
 </body>
 
 </html>
