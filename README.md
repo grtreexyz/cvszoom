@@ -10,6 +10,8 @@
 //拖动动量加速度，快速拖动后会继续运动
 //spiteBlock为阿里云图片服务分片器
 //两种模式，img和canvas
+
+
         self.defaults = {
             'fullWidth': imgLevels[0][0][0].w,
             'fullHeight': imgLevels[0][0][0].h,
@@ -21,4 +23,5 @@
             'thumbnailSize': 160,
             'mode': 'img' //'img','canvas',canvas模式，由于浏览器限制不能大于4000像素
         };
+        
 canvas模式正在改写，取消大小限制
