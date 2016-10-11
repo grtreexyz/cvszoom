@@ -9,12 +9,13 @@
 //splitBlock为阿里云图片服务分片器
 
 
-$('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;color:red;font-size:30px;top:0;left:0;"></p');
-(function ($, window, document, undefined) {
-    $.fn.cvszoom = function (imgLevels, options) {
+//$('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;color:red;font-size:30px;top:0;left:0;"></p');
+(function($, window, document, undefined) {
+    $.fn.cvszoom = function(imgLevels, options) {
         var t = new cvszoom(this, imgLevels, options);
         return t;
     }
+
     function cvszoom(el, imgLevels, options) {
         var self = this;
         self.$layer = $(el);
@@ -26,9 +27,9 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
             'scaleNum': 1.8, //每级相对上一级的单边放大倍数
             'overScaleTimes': 2, //放大到全分辨率后，可以继续放大的倍数
             'whiteBorderSize': 100, //图片边缘与容器边缘的最大间隙
-            'thumbnail': true,//是否显示缩略图
+            'thumbnail': true, //是否显示缩略图
             'thumbnailSize': 160,
-            'mode': 'img'//'img','canvas'//canvas模式，由于浏览器限制不能大于4000像素
+            'mode': 'img' //'img','canvas'//canvas模式，由于浏览器限制不能大于4000像素
         };
         if ('MozTransform' in document.documentElement.style || 'WebkitTransform' in document.documentElement.style || 'OTransform' in document.documentElement.style || 'msTransform' in document.documentElement.style) {
             self.canTransform = true;
@@ -51,6 +52,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
         } else {
             imgmodeinit();
         }
+
         function imgmodeinit() {
             self.options.mode = 'img';
             self.canvas = document.createElement('div');
@@ -102,10 +104,10 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
         self.$layer.append(self.canvas);
         self.$canvas = $(self.canvas);
         self.$canvas.css({ '-moz-transform-origin': '0 0', '-webkit-transform-origin': '0 0', '-ms-transform-origin': '0 0', 'transform-origin': '0 0' });
-        self.$canvas.on('mousedown touchstart', function (e) {
+        self.$canvas.on('mousedown touchstart', function(e) {
             self.imgMove(e, self);
         });
-        self.$layer.on('touchstart', function (ev) {
+        self.$layer.on('touchstart', function(ev) {
             var touchs = ev.originalEvent.touches;
             if (touchs.length != 2) return;
             ev.preventDefault();
@@ -116,7 +118,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
             var dis = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
             //$('#debugshow').html("");
             //$('#debugshow').html(1);
-            self.$layer.off('touchmove').on('touchmove', function (ev) {
+            self.$layer.off('touchmove').on('touchmove', function(ev) {
                 ev.preventDefault();
                 var touchs = ev.originalEvent.touches;
                 if (touchs.length != 2) {
@@ -136,13 +138,13 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                     dis = dis2;
                 }
             });
-            self.$layer.on('touchend', function (ev) {
+            self.$layer.on('touchend', function(ev) {
                 ev.preventDefault();
                 self.$layer.off('touchmove touchend');
             });
         });
         //滚轮事件
-        self.$layer.on('mousewheel DOMMouseScroll', function (e) {
+        self.$layer.on('mousewheel DOMMouseScroll', function(e) {
             e.preventDefault();
             var delta = (e.originalEvent.wheelDelta && (e.originalEvent.wheelDelta > 0 ? 1 : -1)) || (e.originalEvent.detail && (e.originalEvent.detail > 0 ? -1 : 1));
             if (typeof e.pageX != 'undefined')
@@ -150,15 +152,15 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
             else
                 delta > 0 ? self.Scale(1.1) : self.Scale(0.9);
         });
-        self.$canvas.dblclick(function (e) {
+        self.$canvas.dblclick(function(e) {
             e.preventDefault();
             if (typeof e.pageX != 'undefined')
                 self.Scale(self.options.scaleNum, { x: e.pageX - self.$layer.offset().left, y: e.pageY - self.$layer.offset().top });
             else
                 self.Scale(self.options.scaleNum);
         });
-        window.onorientationchange = function(){
-            setTimeout(function () { self.resize(self); }, 100);
+        window.onorientationchange = function() {
+            setTimeout(function() { self.resize(self); }, 100);
         }
         self.floorLevelTimeout = 'undefined';
         //缩略图
@@ -207,7 +209,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
 
 
             };
-            self.$thumbnail.find('.shang').on('mousedown touchstart', function (e) { //放大缩小条
+            self.$thumbnail.find('.shang').on('mousedown touchstart', function(e) { //放大缩小条
                 // if (self.$scalebrightbox.setCapture) {
                 //  self.$scalebrightbox.setCapture();
                 // } else if (window.captureEvents) {
@@ -217,7 +219,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                 var xy = self.getxy(e);
                 var x0 = xy.x;
                 var y0 = xy.y;
-                $(document).off('mousemove touchmove').on('mousemove touchmove', function (e) {
+                $(document).off('mousemove touchmove').on('mousemove touchmove', function(e) {
                     e.preventDefault();
                     var xy = self.getxy(e);
                     var x1 = xy.x;
@@ -229,7 +231,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                     y0 = y1;
                 });
                 //鼠标弹起
-                $(document).off("mouseup touchend").on("mouseup touchend", function (e) {
+                $(document).off("mouseup touchend").on("mouseup touchend", function(e) {
                     e.preventDefault();
                     // if (self.$scalebrightbox.releaseCapture) self.$scalebrightbox.releaseCapture();
                     // else if (window.captureEvents) {
@@ -238,7 +240,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                     $(document).off('mousemove mouseup touchmove touchend');
                 });
             });
-            self.$thumbnail.find('.xia,.scalebrightbox').on('mousedown touchstart', function (e) { //放大缩小条
+            self.$thumbnail.find('.xia,.scalebrightbox').on('mousedown touchstart', function(e) { //放大缩小条
                 if (self.$scalebrightbox.setCapture) {
                     self.$scalebrightbox.setCapture();
                 } else if (window.captureEvents) {
@@ -253,7 +255,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                 self.$scalebrightbox.css('left', left + 'px');
                 s = 1 + (self.maxScaleNum - 1) * (left - 30) / self.$scalebrightbox.mw;
                 self.Scale(s / self.scale);
-                $(document).off('mousemove touchmove').on('mousemove touchmove', function (e) {
+                $(document).off('mousemove touchmove').on('mousemove touchmove', function(e) {
                     e.preventDefault();
                     var x1 = self.getxy(e).x;
                     var left = parseFloat(self.$scalebrightbox.css('left')) - 30 + x1 - x0;
@@ -265,7 +267,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                     x0 = x1;
                 });
                 //鼠标弹起
-                $(document).off("mouseup touchend").on("mouseup touchend", function (e) {
+                $(document).off("mouseup touchend").on("mouseup touchend", function(e) {
                     e.preventDefault();
                     if (self.$scalebrightbox.releaseCapture) self.$scalebrightbox.releaseCapture();
                     else if (window.captureEvents) {
@@ -274,7 +276,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                     $(document).off('mousemove mouseup touchmove touchend');
                 });
             });
-            self.$thumbnail.find('.previewbox').on('mousedown touchstart', function (e) {
+            self.$thumbnail.find('.previewbox').on('mousedown touchstart', function(e) {
                 //console.log(e);
                 var bbw = parseFloat($brightbox[0].style.width);
                 var bbh = parseFloat($brightbox[0].style.height);
@@ -308,7 +310,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                 $brightbox.css({ top: top + 'px', left: left + 'px' });
                 self.setCss();
                 self.draw();
-                $(document).off('mousemove touchmove').on('mousemove touchmove', function (e) {
+                $(document).off('mousemove touchmove').on('mousemove touchmove', function(e) {
                     e.preventDefault();
                     if (self.width < self.containW && self.height < self.containH) return;
                     var xy = self.getxy(e);
@@ -342,7 +344,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                     self.draw();
                 });
                 //鼠标弹起
-                $(document).off("mouseup touchend").on("mouseup touchend", function (e) {
+                $(document).off("mouseup touchend").on("mouseup touchend", function(e) {
                     e.preventDefault();
                     if ($brightbox.releaseCapture) $brightbox.releaseCapture();
                     else if (window.captureEvents) {
@@ -352,7 +354,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                 });
             });
 
-            self.setThumbnail = function () {
+            self.setThumbnail = function() {
                 scalebrightboxMove();
                 brightboxScale();
                 brightboxMove();
@@ -405,13 +407,13 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                 self.$thumbnail.find(".dimbox.bottom").css({ left: 0, top: bt, width: '100%', height: bh });
             }
 
-            $('.bigButton').click(function () {
+            $('.bigButton').click(function() {
                 self.Scale(self.options.scaleNum);
             });
-            $('.smallButton').click(function () {
+            $('.smallButton').click(function() {
                 self.Scale(1 / self.options.scaleNum)
             });
-            $('.closeButton').click(function () {
+            $('.closeButton').click(function() {
                 self.destroy();
             });
             //以上是缩略图视窗相关
@@ -419,22 +421,22 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
         self.setCss();
 
     }
-    cvszoom.prototype.initdraw = function () {
+    cvszoom.prototype.initdraw = function() {
         var self = this;
         for (var wi = 0; wi < self.imgLevels[0].length; wi++) {
             for (var yi = 0; yi < self.imgLevels[0][wi].length; yi++) {
-                (function (wi, yi) {
+                (function(wi, yi) {
                     self.imgload(0, wi, yi);
                 })(wi, yi)
             }
         }
     };
-    cvszoom.prototype.imgload = function (i, wi, yi) {
+    cvszoom.prototype.imgload = function(i, wi, yi) {
         var self = this;
         if (typeof self.imgs[i][wi][yi].complete == 'undefined') {
             self.imgs[i][wi][yi] = new Image();
             self.imgs[i][wi][yi].isdrawed = false;
-            self.imgs[i][wi][yi].onload = function () {
+            self.imgs[i][wi][yi].onload = function() {
                 if (self.options.mode != 'img') {
                     if (i == self.curLevel && this.isdrawed == false) {
                         self.ctx.drawImage(this, self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
@@ -457,7 +459,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
             }
         }
     };
-    cvszoom.prototype.setCss = function () {
+    cvszoom.prototype.setCss = function() {
         var self = this;
         //图片不允许超出边界,左右上下留白
         if (self.width < self.containW) //图片宽度没容器大
@@ -498,36 +500,36 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
     };
 
     //缩放、判断瓦片级别变化
-    cvszoom.prototype.Scale = function (ScaleNew, center) {
-        var self = this;
-        self.scale * ScaleNew > self.maxScaleNum ? ScaleNew = self.maxScaleNum / self.scale : (self.scale * ScaleNew < 1 ? ScaleNew = 1 / self.scale : 1);
-        var c = center || {
-            x: self.containW / 2,
-            y: self.containH / 2
-        };
-        self.left = c.x - self.width * ScaleNew * (c.x - self.left) / self.width;
-        self.top = c.y - self.height * ScaleNew * (c.y - self.top) / self.height;
-        self.width = self.width * ScaleNew;
-        self.height = self.height * ScaleNew;
-        self.scale = self.scale * ScaleNew;
-        self.setCss();
-        var LevelNew = Math.ceil(Math.log(self.scale) / Math.log(self.options.scaleNum));
-        if (LevelNew > self.LevelMax) LevelNew = self.LevelMax;
-        else if (LevelNew < 0) LevelNew = 0;
-        if (self.floorLevelTimeout != 'undefined') {
-            clearTimeout(self.floorLevelTimeout);
-            self.floorLevelTimeout = 'undefined';
+    cvszoom.prototype.Scale = function(ScaleNew, center) {
+            var self = this;
+            self.scale * ScaleNew > self.maxScaleNum ? ScaleNew = self.maxScaleNum / self.scale : (self.scale * ScaleNew < 1 ? ScaleNew = 1 / self.scale : 1);
+            var c = center || {
+                x: self.containW / 2,
+                y: self.containH / 2
+            };
+            self.left = c.x - self.width * ScaleNew * (c.x - self.left) / self.width;
+            self.top = c.y - self.height * ScaleNew * (c.y - self.top) / self.height;
+            self.width = self.width * ScaleNew;
+            self.height = self.height * ScaleNew;
+            self.scale = self.scale * ScaleNew;
+            self.setCss();
+            var LevelNew = Math.ceil(Math.log(self.scale) / Math.log(self.options.scaleNum));
+            if (LevelNew > self.LevelMax) LevelNew = self.LevelMax;
+            else if (LevelNew < 0) LevelNew = 0;
+            if (self.floorLevelTimeout != 'undefined') {
+                clearTimeout(self.floorLevelTimeout);
+                self.floorLevelTimeout = 'undefined';
+            }
+            self.floorLevelTimeout = setTimeout(function() {
+                self.draw(LevelNew);
+            }, 300); //解决连续变级太快，浪费流量读取低级图层的问题
         }
-        self.floorLevelTimeout = setTimeout(function () {
-            self.draw(LevelNew);
-        }, 300); //解决连续变级太快，浪费流量读取低级图层的问题
-    }
-    //判断两个矩形有没有相交
-    cvszoom.prototype.rectTest = function (rect1, rect2) {
-        return rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x && rect1.y < rect2.y + rect2.h && rect1.y + rect1.h > rect2.y;
-    }
-    //绘图
-    cvszoom.prototype.draw = function (LevelNew) {
+        //判断两个矩形有没有相交
+    cvszoom.prototype.rectTest = function(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x && rect1.y < rect2.y + rect2.h && rect1.y + rect1.h > rect2.y;
+        }
+        //绘图
+    cvszoom.prototype.draw = function(LevelNew) {
         var self = this;
         // var allLoad = true;
         //放大后的获取全部瓦片后不再向下级draw瓦片，但缩小后效果并不好
@@ -566,11 +568,11 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
         for (var wi = 0; wi < self.imgLevels[LN].length; wi++) {
             for (var yi = 0; yi < self.imgLevels[LN][wi].length; yi++) {
                 if (self.rectTest(self.imgLevels[LN][wi][yi], {
-                    x: -self.left * bl,
-                    y: -self.top * bl,
-                    w: self.containW * bl,
-                    h: self.containH * bl
-                })) {
+                        x: -self.left * bl,
+                        y: -self.top * bl,
+                        w: self.containW * bl,
+                        h: self.containH * bl
+                    })) {
                     self.imgload(LN, wi, yi);
                     // self.curLevelAllDraw = false;
                 }
@@ -578,7 +580,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
         }
     };
     //图片的拖拽
-    cvszoom.prototype.imgMove = function (e, self) {
+    cvszoom.prototype.imgMove = function(e, self) {
         e.preventDefault();
         var vInterval = "undefined";
         this.setCapture ? this.setCapture() : window.captureEvents && window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
@@ -603,7 +605,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
         //$('#debugshow').html("");
         //$('#debugshow').html(e.originalEvent.touches.length);
         //鼠标移动
-        $(document).on('mousemove touchmove', function (e) {
+        $(document).on('mousemove touchmove', function(e) {
 
             e.preventDefault();
             //不断的获取mousemove的坐标值
@@ -619,7 +621,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
 
         });
         //鼠标弹起
-        $(document).on("mouseup touchend", function (e) {
+        $(document).on("mouseup touchend", function(e) {
             //拖拽加速度
             e.preventDefault();
             var stoptime = new Date().getTime();
@@ -637,7 +639,7 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
                 var a = v / max;
                 ax = Math.sqrt(a * a * vx * vx / v / v);
                 ay = Math.sqrt(a * a * vy * vy / v / v);
-                vInterval = setInterval(function () {
+                vInterval = setInterval(function() {
                     //var oldtime = new Date().getTime();
                     i++;
                     if (i >= max) {
@@ -663,11 +665,11 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
             flag = false;
         });
     };
-    cvszoom.prototype.resize = function (self) {
+    cvszoom.prototype.resize = function(self) {
         if (self.options.mode == 'img') {
             var newW = self.$layer.width();
             var newH = self.$layer.height();
-            var bl=self.containW / newW;
+            var bl = self.containW / newW;
             self.width = self.width * bl;
             self.height = self.height * bl;
             self.left = self.left + (newW - self.containW) / 2 - (self.width - self.width / bl) / 2;
@@ -676,10 +678,9 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
             self.containH = newH; //容器高
             self.setCss();
             self.draw();
-        } else {
-        }
+        } else {}
     }
-    cvszoom.prototype.destroy = function () {
+    cvszoom.prototype.destroy = function() {
         var self = this;
         self.$layer.off('mousedown touchstart mousewheel DOMMouseScroll');
         self.$canvas.remove();
@@ -687,10 +688,10 @@ $('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;colo
         self.closed();
         delete self;
     }
-    cvszoom.prototype.closed = function () {
+    cvszoom.prototype.closed = function() {
         console.log('closed');
     }
-    cvszoom.prototype.getxy = function (event) {
+    cvszoom.prototype.getxy = function(event) {
         if (typeof event.originalEvent !== 'undefined')
             event = event.originalEvent;
 
@@ -737,17 +738,17 @@ function splitBlock(imgurl, data, options, done) {
     var minWH = Math.min(data.width, data.height);
     var maxScaleTimes = Math.round(Math.log(maxWH / this.diviOptions.fbl0) / Math.log(this.diviOptions.scaleNum)); //根据单边放大倍数算单边最大放大次数
     maxScaleTimes < 1 && (maxScaleTimes = 1);
-    var kgb = Math.round(maxWH / minWH); //图片宽高比
+    var kgb = data.width / data.height;
+    var bl = Math.round(maxWH / minWH); //图片比
     var wDh = data.width > data.height ? true : false; //宽大于高
     var hbn; //高，当前级别块数
     var wbn; //宽，当前级别块数
-    hbn = Math.round(Math.sqrt(maxBlockNum / kgb)); //高，当前级别块数
+    var bn = Math.round(Math.sqrt(maxBlockNum / bl)); //高，当前级别块数
     for (var i = maxScaleTimes; i >= 1; i--) {
         Levels[i] = [];
         var p = Math.ceil(100 / (Math.pow(1.8, maxScaleTimes - i)));
-        hbn < 1 ? hbn = 1 : 1;
-        wbn = hbn * kgb; //宽，当前级别块数
-        wbn < 1 ? wbn = 1 : 1;
+        bn < 1 && (bn = 1);
+        wDh ? (hbn = bn, wbn = hbn * kgb, wbn < 1 ? wbn = 1 : 1) : (wbn = bn, hbn = wbn / kgb, hbn < 1 ? hbn = 1 : 1);
         for (var wi = 0; wi < wbn; wi++) {
             Levels[i][wi] = [];
             for (var yi = 0; yi < hbn; yi++) {
@@ -769,7 +770,7 @@ function splitBlock(imgurl, data, options, done) {
 
             }
         }
-        hbn = Math.round(hbn / this.diviOptions.scaleNum);
+        bn = Math.round(bn / this.diviOptions.scaleNum);
     }
     Levels[0] = [];
     Levels[0][0] = [];
@@ -781,34 +782,33 @@ function splitBlock(imgurl, data, options, done) {
     Levels[0][0][0].h = data.height;
     Levels[0][0][0].maxScaleTimes = maxScaleTimes;
     Levels[0][0][0].originalURL = imgurl;
-    return Levels;
+    console.log(Levels);
     done && done(Levels);
+    return Levels;
 }
-// splitBlock({
-//  height: 804,
-//  size: 6492450,
-//  width: 18893
-// }, done);
-// divide('https://cdn.ywart.com/yw/20160902133828342599863b1.jpg', null, function(data) {
-//  console.log(data)
-//  window.temp = $('#contain').cvszoom(data);
-//  window.temp.closed = function() {
-//      console.log('dddddddddd');
-//  }
-// // });
+// splitBlock('https://cdn.ywart.com/yw/20160902133828342599863b1.jpg',{
+//     height: 804,
+//     size: 6492450,
+//     width: 18893
+// },null,function(data) {
+//     console.log(data)
+//     temp = $('#contain').cvszoom(data);
+//     temp.closed = function() {
+//         console.log('dddddddddd');
+//     }
+// });
 
-// splitBlock({
-//  height: 2858,
-//  size: 5149126,
-//  width: 2834
-// }, done);
-//divide('https://cdn.ywart.com/yw/20160510133408212f99ee8d6.jpg', null, function(data) {
-//  console.log(data)
-//  window.temp = $('#contain').cvszoom(data,{thumbnail:true});
-//  window.temp.closed = function() {
-//      console.log('dddddddddd');
-//  }
-//});
+// splitBlock('https://cdn.ywart.com/yw/201607080042354133d66e4e4.jpg',{
+//     "height": 3689,
+//     "size": 6180319,
+//     "width": 4924},null,function(data) {
+//     console.log(data)
+//     temp = $('#contain').cvszoom(data);
+//     temp.closed = function() {
+//         console.log('dddddddddd');
+//     }
+// });
+
 
 //<script type="text/javascript">
 //    var $container = $('body');
