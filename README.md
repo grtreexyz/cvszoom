@@ -21,12 +21,12 @@ splitBlock('阿里云图片服务地址/201607080042354133d66e4e4.jpg',{
     }
 }); 
 
-<script type="text/javascript"> 
+script type="text/javascript"> 
     var $container = $('body'); 
     var imgurl = 图片地址   
     $.get(imgurl + '@info', function (data) {   
         var d = splitBlock(imgurl, data, { fbl0: 800,scaleNum:1.8, src000: imgurl + '_small01' });  
         var temp=$container.cvszoom(d, { thumbnail: true,scaleNum:1.8 });   
     }); 
-</script>   
+/script>   
 
