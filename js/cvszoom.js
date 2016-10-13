@@ -1,15 +1,33 @@
 ;
 //create by 栾树崇
-//version 1.1
+//version 1.5
 //瓦片图放大效果
 //带缩略图定位效果
-//自知应鼠标和触摸设备
+//自适应鼠标和触摸设备
 //双击放大，滚轮缩放
 //拖动动量加速度，快速拖动后会继续运动
 //splitBlock为阿里云图片服务分片器
+//'img','canvas'//img模式现在效果比较理想，canvas模式不够平滑有时闪，还没想到办法解决
 
+// splitBlock('阿里云图片服务地址/201607080042354133d66e4e4.jpg',{
+//     "height": 3689,
+//     "size": 6180319,
+//     "width": 4924},null,function(data) {
+//     console.log(data)
+//     temp = $('#contain').cvszoom(data);
+//     temp.closed = function() {
+//         console.log('closed');
+//     }
+// });
 
-//$('body').append('<p id="debugshow" style="position:fixed;z-index:999999999;color:red;font-size:30px;top:0;left:0;"></p');
+// <script type="text/javascript">
+//     var $container = $('body');
+//     var imgurl = 图片地址
+//     $.get(imgurl + '@info', function (data) {
+//         var d = splitBlock(imgurl, data, { fbl0: 800,scaleNum:1.8, src000: imgurl + '_small01' });
+//         var temp=$container.cvszoom(d, { thumbnail: true,scaleNum:1.8 });
+//     });
+// </script>
 (function($, window, document, undefined) {
     $.fn.cvszoom = function(imgLevels, options) {
         var t = new cvszoom(this, imgLevels, options);
@@ -38,15 +56,12 @@
         }
         self.options = $.extend({}, self.defaults, options);
         //初始化canvas
-        if (self.options.mode != 'img') {
+        if (self.options.mode == 'canvas') {
             try {
                 self.canvas = document.createElement("canvas");
+                self.canvas.crossOrigin = 'anonymous';
                 self.ctx = self.canvas.getContext('2d');
             } catch (e) {
-                //console.log(e);
-                //self.canvas = document.createElement('img');
-                //self.canvas.src = imgLevels[0][0][0].originalURL;
-                //alert('您的浏览器版本太低，不支持canvas，将直接加载原图...,请您耐心等待');
                 imgmodeinit();
             }
         } else {
@@ -71,16 +86,16 @@
         }
         i--;
         self.LevelMax = i;
+        var ww, hh;
+        self.containW = self.$layer.width(); //容器宽
+        self.containH = self.$layer.height(); //容器高
         if (self.options.mode != 'img') {
-            self.canvas.width = self.options.fullWidth;
-            self.canvas.height = self.options.fullHeight;
+            self.canvas.width = self.containW;
+            self.canvas.height = self.containH;
         } else {
             self.canvas.style.width = self.options.fullWidth + 'px';
             self.canvas.style.height = self.options.fullHeight + 'px';
         }
-        var ww, hh;
-        self.containW = self.$layer.width(); //容器宽
-        self.containH = self.$layer.height(); //容器高
         self.kgb = self.options.fullWidth / self.options.fullHeight; //图片宽高比
         containkgb = self.containW / self.containH; //容器宽高比
         self.kgb > containkgb ? (ww = self.containW * self.options.initSize, hh = ww / self.kgb) : (hh = self.containH * self.options.initSize, ww = hh * self.kgb);
@@ -116,8 +131,6 @@
             var x10 = touchs[1].clientX;
             var y10 = touchs[1].clientY;
             var dis = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
-            //$('#debugshow').html("");
-            //$('#debugshow').html(1);
             self.$layer.off('touchmove').on('touchmove', function(ev) {
                 ev.preventDefault();
                 var touchs = ev.originalEvent.touches;
@@ -210,11 +223,6 @@
 
             };
             self.$thumbnail.find('.shang').on('mousedown touchstart', function(e) { //放大缩小条
-                // if (self.$scalebrightbox.setCapture) {
-                //  self.$scalebrightbox.setCapture();
-                // } else if (window.captureEvents) {
-                //  window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
-                // }
                 e.preventDefault();
                 var xy = self.getxy(e);
                 var x0 = xy.x;
@@ -233,10 +241,6 @@
                 //鼠标弹起
                 $(document).off("mouseup touchend").on("mouseup touchend", function(e) {
                     e.preventDefault();
-                    // if (self.$scalebrightbox.releaseCapture) self.$scalebrightbox.releaseCapture();
-                    // else if (window.captureEvents) {
-                    //  window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
-                    // }
                     $(document).off('mousemove mouseup touchmove touchend');
                 });
             });
@@ -318,7 +322,6 @@
                         y1 = xy.y;
                     var left = oleft + x1 - x0;
                     var top = otop + y1 - y0;
-                    //console.log(x1,x0,y1,y0,left,top);
                     //限制白框不出范围
 
                     if (left <= 0) {
@@ -421,44 +424,6 @@
         self.setCss();
 
     }
-    cvszoom.prototype.initdraw = function() {
-        var self = this;
-        for (var wi = 0; wi < self.imgLevels[0].length; wi++) {
-            for (var yi = 0; yi < self.imgLevels[0][wi].length; yi++) {
-                (function(wi, yi) {
-                    self.imgload(0, wi, yi);
-                })(wi, yi)
-            }
-        }
-    };
-    cvszoom.prototype.imgload = function(i, wi, yi) {
-        var self = this;
-        if (typeof self.imgs[i][wi][yi].complete == 'undefined') {
-            self.imgs[i][wi][yi] = new Image();
-            self.imgs[i][wi][yi].isdrawed = false;
-            self.imgs[i][wi][yi].onload = function() {
-                if (self.options.mode != 'img') {
-                    if (i == self.curLevel && this.isdrawed == false) {
-                        self.ctx.drawImage(this, self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
-                        this.isdrawed = true;
-                    }
-                } else {
-                    this.style.position = 'absolute';
-                    this.style.width = self.imgLevels[i][wi][yi].w + 'px';
-                    this.style.height = self.imgLevels[i][wi][yi].h + 'px';
-                    this.style.top = self.imgLevels[i][wi][yi].y + 'px';
-                    this.style.left = self.imgLevels[i][wi][yi].x + 'px';
-                    this.style.zIndex = i;
-                    self.canvas.appendChild(this);
-                }
-            };
-            self.imgs[i][wi][yi].src = self.imgLevels[i][wi][yi].src;
-        } else if (self.imgs[i][wi][yi].complete == true) {
-            if (self.options.mode != 'img') {
-                self.imgs[i][wi][yi].onload();
-            }
-        }
-    };
     cvszoom.prototype.setCss = function() {
         var self = this;
         //图片不允许超出边界,左右上下留白
@@ -479,15 +444,16 @@
             self.top > self.options.whiteBorderSize ? self.top = self.options.whiteBorderSize : (self.top < -temp ? self.top = -temp : 1);
         }
 
-        if (self.canTransform) {
-            transform(self.$canvas, 'matrix(' + self.width / self.options.fullWidth + ',0,0,' + self.height / self.options.fullHeight + ',' + self.left + ',' + self.top + ')');
-        } else {
-            self.canvas.style.width = self.width + 'px';
-            self.canvas.style.height = self.height + 'px';
-            self.canvas.style.top = self.top + 'px';
-            self.canvas.style.left = self.left + 'px';
+        if (self.options.mode == 'img') {
+            if (self.canTransform) {
+                transform(self.$canvas, 'matrix(' + self.width / self.options.fullWidth + ',0,0,' + self.height / self.options.fullHeight + ',' + self.left + ',' + self.top + ')');
+            } else {
+                self.canvas.style.width = self.width + 'px';
+                self.canvas.style.height = self.height + 'px';
+                self.canvas.style.top = self.top + 'px';
+                self.canvas.style.left = self.left + 'px';
+            }
         }
-        //console.log(self.left,self.top,self.width,self.height);
 
         function transform($elem, str) {
             $elem.css('transform', str);
@@ -498,73 +464,16 @@
 
         if (self.options.thumbnail) self.setThumbnail();
     };
-
-    //缩放、判断瓦片级别变化
-    cvszoom.prototype.Scale = function(ScaleNew, center) {
-            var self = this;
-            self.scale * ScaleNew > self.maxScaleNum ? ScaleNew = self.maxScaleNum / self.scale : (self.scale * ScaleNew < 1 ? ScaleNew = 1 / self.scale : 1);
-            var c = center || {
-                x: self.containW / 2,
-                y: self.containH / 2
-            };
-            self.left = c.x - self.width * ScaleNew * (c.x - self.left) / self.width;
-            self.top = c.y - self.height * ScaleNew * (c.y - self.top) / self.height;
-            self.width = self.width * ScaleNew;
-            self.height = self.height * ScaleNew;
-            self.scale = self.scale * ScaleNew;
-            self.setCss();
-            var LevelNew = Math.ceil(Math.log(self.scale) / Math.log(self.options.scaleNum));
-            if (LevelNew > self.LevelMax) LevelNew = self.LevelMax;
-            else if (LevelNew < 0) LevelNew = 0;
-            if (self.floorLevelTimeout != 'undefined') {
-                clearTimeout(self.floorLevelTimeout);
-                self.floorLevelTimeout = 'undefined';
-            }
-            self.floorLevelTimeout = setTimeout(function() {
-                self.draw(LevelNew);
-            }, 300); //解决连续变级太快，浪费流量读取低级图层的问题
-        }
-        //判断两个矩形有没有相交
-    cvszoom.prototype.rectTest = function(rect1, rect2) {
-            return rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x && rect1.y < rect2.y + rect2.h && rect1.y + rect1.h > rect2.y;
-        }
-        //绘图
+    //绘图
     cvszoom.prototype.draw = function(LevelNew) {
         var self = this;
-        // var allLoad = true;
-        //放大后的获取全部瓦片后不再向下级draw瓦片，但缩小后效果并不好
-        // if (LN <= self.curLevel) {
-        //  if (self.curLevelAllDraw) return; //当前级别全部draw,缩小不变
-        //  var i = self.curLevel;
-        //  for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
-        //      if (allLoad == false) break;
-        //      for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
-        //          if (!self.imgs[i][wi][yi].complete) {
-        //              allLoad = false;
-        //              break;
-        //          }
-        //      }
-        //  }
-        //  if (allLoad == true) {
-        //      for (var wi = 0; wi < self.imgLevels[i].length; wi++) {
-        //          for (var yi = 0; yi < self.imgLevels[i][wi].length; yi++) {
-        //              self.ctx.drawImage(self.imgs[i][wi][yi], self.imgLevels[i][wi][yi].x, self.imgLevels[i][wi][yi].y, self.imgLevels[i][wi][yi].w, self.imgLevels[i][wi][yi].h);
-        //          }
-        //      }
-        //      self.curLevelAllDraw = true;
-        //      return;
-        //  }
-        // }
-        //层级变化，清空已draw标识
-        if (LevelNew && LevelNew != self.curLevel) {
-            for (var wi = 0; wi < self.imgLevels[LevelNew].length; wi++) {
-                for (var yi = 0; yi < self.imgLevels[LevelNew][wi].length; yi++) {
-                    self.imgs[LevelNew][wi][yi].isdrawed = false;
-                }
-            }
-        }
         var bl = self.options.fullWidth / self.width;
-        var LN = self.curLevel = LevelNew || self.curLevel;
+        var LN = LevelNew || self.curLevel;
+        if (self.options.mode == 'canvas') {
+            if (LN <= self.curLevel)
+                self.ctx.clearRect(0, 0, self.canvas.width, self.canvas.height);
+        }
+        self.curLevel = LN;
         for (var wi = 0; wi < self.imgLevels[LN].length; wi++) {
             for (var yi = 0; yi < self.imgLevels[LN][wi].length; yi++) {
                 if (self.rectTest(self.imgLevels[LN][wi][yi], {
@@ -574,12 +483,86 @@
                         h: self.containH * bl
                     })) {
                     self.imgload(LN, wi, yi);
-                    // self.curLevelAllDraw = false;
                 }
             }
         }
     };
-    //图片的拖拽
+
+    cvszoom.prototype.initdraw = function() {
+        var self = this;
+        for (var wi = 0; wi < self.imgLevels[0].length; wi++) {
+            for (var yi = 0; yi < self.imgLevels[0][wi].length; yi++) {
+                (function(wi, yi) {
+                    self.imgload(0, wi, yi);
+                })(wi, yi)
+            }
+        }
+    };
+    cvszoom.prototype.imgload = function(i, wi, yi) {
+        var self = this;
+        if (typeof self.imgs[i][wi][yi].complete == 'undefined') {
+            self.imgs[i][wi][yi] = new Image();
+            self.imgs[i][wi][yi].onload = function() {
+                if (self.options.mode == 'canvas') {
+                    var bl = self.width / self.options.fullWidth;
+                    self.ctx.drawImage(this, (self.imgLevels[i][wi][yi].x * bl + self.left), (self.imgLevels[i][wi][yi].y * bl + self.top), self.imgLevels[i][wi][yi].w * bl, self.imgLevels[i][wi][yi].h * bl);
+                } else {
+                    this.style.position = 'absolute';
+                    this.style.width = self.imgLevels[i][wi][yi].w + 'px';
+                    this.style.height = self.imgLevels[i][wi][yi].h + 'px';
+                    this.style.top = self.imgLevels[i][wi][yi].y + 'px';
+                    this.style.left = self.imgLevels[i][wi][yi].x + 'px';
+                    this.style.zIndex = i;
+                    self.canvas.appendChild(this);
+                }
+            };
+            self.imgs[i][wi][yi].src = self.imgLevels[i][wi][yi].src;
+        } else if (self.imgs[i][wi][yi].complete == true) {
+            if (self.options.mode != 'img') {
+                self.imgs[i][wi][yi].onload();
+            }
+        }
+    };
+    //缩放、判断瓦片级别变化
+    cvszoom.prototype.Scale = function(ScaleNew, center) {
+            var self = this;
+            self.scale * ScaleNew > self.maxScaleNum ? ScaleNew = self.maxScaleNum / self.scale : (self.scale * ScaleNew < 1 ? ScaleNew = 1 / self.scale : 1);
+            var c = center || {
+                x: self.containW / 2,
+                y: self.containH / 2
+            };
+            var newleft = c.x - self.width * ScaleNew * (c.x - self.left) / self.width;
+            var newtop = c.y - self.height * ScaleNew * (c.y - self.top) / self.height;
+            self.width = self.width * ScaleNew;
+            self.height = self.height * ScaleNew;
+            self.scale = self.scale * ScaleNew;
+            var LevelNew = Math.ceil(Math.log(self.scale) / Math.log(self.options.scaleNum));
+            if (LevelNew > self.LevelMax) LevelNew = self.LevelMax;
+            else if (LevelNew < 0) LevelNew = 0;
+            if (self.options.mode == 'canvas' && LevelNew >= self.curLevel && ScaleNew > 1) {
+                //var x=self.canvas.width * (1-ScaleNew)/2;
+                //var y=self.canvas.height * (1-ScaleNew)/2;
+                //var temp = self.canvas;
+                //self.ctx.clearRect(0, 0, self.canvas.width, self.canvas.height);
+                self.ctx.drawImage(self.canvas, c.x - c.x * ScaleNew, c.y - c.y * ScaleNew, self.canvas.width * ScaleNew, self.canvas.height * ScaleNew);
+            }
+            self.left = newleft;
+            self.top = newtop;
+            self.setCss();
+
+            if (self.floorLevelTimeout != 'undefined') {
+                clearTimeout(self.floorLevelTimeout);
+                self.floorLevelTimeout = 'undefined';
+            }
+            self.floorLevelTimeout = setTimeout(function() {
+                self.draw(LevelNew);
+            }, 300); //利用延迟解决连续变级太快，浪费流量读取低级图层的问题
+        }
+        //判断两个矩形有没有相交
+    cvszoom.prototype.rectTest = function(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x && rect1.y < rect2.y + rect2.h && rect1.y + rect1.h > rect2.y;
+        }
+        //图片的拖拽
     cvszoom.prototype.imgMove = function(e, self) {
         e.preventDefault();
         var vInterval = "undefined";
@@ -602,8 +585,6 @@
             ox0 = x0,
             oy0 = y0;
         var starttime = new Date().getTime();
-        //$('#debugshow').html("");
-        //$('#debugshow').html(e.originalEvent.touches.length);
         //鼠标移动
         $(document).on('mousemove touchmove', function(e) {
 
@@ -627,8 +608,6 @@
             var stoptime = new Date().getTime();
             var v = Math.abs(Math.round(Math.sqrt((x0 - ox0) * (x0 - ox0) + (y0 - oy0) * (y0 - oy0)))) / (stoptime - starttime);
             if (v > 2) {
-                //console.log(v);
-                //console.log((layerX + x0 - x00) + ',' + (layerY + y0 - y00));
                 vx = (x0 - ox0) / (stoptime - starttime);
                 vy = (y0 - oy0) / (stoptime - starttime);
                 v = v / 2;
@@ -748,7 +727,7 @@ function splitBlock(imgurl, data, options, done) {
         Levels[i] = [];
         var p = Math.ceil(100 / (Math.pow(1.8, maxScaleTimes - i)));
         bn < 1 && (bn = 1);
-        wDh ? (hbn = bn, wbn = hbn * kgb, wbn < 1 ? wbn = 1 : 1) : (wbn = bn, hbn = wbn / kgb, hbn < 1 ? hbn = 1 : 1);
+        wDh ? (hbn = bn, wbn = hbn * kgb, wbn < 1 ? wbn = 1 : wbn = Math.ceil(wbn)) : (wbn = bn, hbn = wbn / kgb, hbn < 1 ? hbn = 1 : hbn = Math.ceil(hbn));
         for (var wi = 0; wi < wbn; wi++) {
             Levels[i][wi] = [];
             for (var yi = 0; yi < hbn; yi++) {
@@ -786,36 +765,3 @@ function splitBlock(imgurl, data, options, done) {
     done && done(Levels);
     return Levels;
 }
-// splitBlock('https://cdn.ywart.com/yw/20160902133828342599863b1.jpg',{
-//     height: 804,
-//     size: 6492450,
-//     width: 18893
-// },null,function(data) {
-//     console.log(data)
-//     temp = $('#contain').cvszoom(data);
-//     temp.closed = function() {
-//         console.log('dddddddddd');
-//     }
-// });
-
-// splitBlock('https://cdn.ywart.com/yw/201607080042354133d66e4e4.jpg',{
-//     "height": 3689,
-//     "size": 6180319,
-//     "width": 4924},null,function(data) {
-//     console.log(data)
-//     temp = $('#contain').cvszoom(data);
-//     temp.closed = function() {
-//         console.log('dddddddddd');
-//     }
-// });
-
-
-//<script type="text/javascript">
-//    var $container = $('body');
-//$container.css('width', document.documentElement.clientWidth + 'px').css('height', document.documentElement.clientHeight + 'px');
-//var imgurl = "https://cdn.ywart.com/yw/" + location.href.substring(location.href.lastIndexOf('?') + 1)
-//$.get(imgurl + '@@info', function (data) {
-//    var d = splitBlock(imgurl, data, { fbl0: 500, src000: imgurl + '_small01' });
-//    var temp=$container.cvszoom(d, { thumbnail: false });
-//});
-//</script>
