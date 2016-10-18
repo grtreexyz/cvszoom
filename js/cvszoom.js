@@ -41,13 +41,13 @@
         self.defaults = {
             'fullWidth': imgLevels[0][0][0].w,
             'fullHeight': imgLevels[0][0][0].h,
-            'initSize': 0.8, //相对容器的比例
-            'scaleNum': 1.8, //每级相对上一级的单边放大倍数
+            'initSize': 0.8, //初始显示时相对容器的比例
+            'scaleNum': 1.8, //每次放大相对上一级的单边放大倍数
             'overScaleTimes': 2, //放大到全分辨率后，可以继续放大的倍数
             'whiteBorderSize': 100, //图片边缘与容器边缘的最大间隙
             'thumbnail': true, //是否显示缩略图
-            'thumbnailSize': 160,
-            'mode': 'img' //'img','canvas'//canvas模式，由于浏览器限制不能大于4000像素
+            'thumbnailSize': 160,//缩略图的大小
+            'mode': 'img' //'img','canvas'//img模式现在效果比较理想，canvas模式不够平滑有时闪，还没想到办法解决
         };
         if ('MozTransform' in document.documentElement.style || 'WebkitTransform' in document.documentElement.style || 'OTransform' in document.documentElement.style || 'msTransform' in document.documentElement.style) {
             self.canTransform = true;
