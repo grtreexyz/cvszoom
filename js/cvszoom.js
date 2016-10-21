@@ -665,7 +665,6 @@
         self.$canvas.remove();
         if (self.options.thumbnail) self.$thumbnail.remove();
         self.closed();
-        delete self;
     }
     cvszoom.prototype.closed = function() {
         console.log('closed');
