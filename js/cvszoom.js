@@ -1,13 +1,14 @@
-;
-//create by 栾树崇
-//version 1.01
+﻿//create by 栾树崇
+//version 1.6
 //瓦片图放大效果
 //带缩略图定位效果
+//缩略图可拖动
 //自适应鼠标和触摸设备
 //双击放大，滚轮缩放
+//保持鼠标悬停位置缩放
 //拖动动量加速度，快速拖动后会继续运动
 //splitBlock为阿里云图片服务分片器
-//'img','canvas'//img模式现在效果比较理想，canvas模式不够平滑有时闪，还没想到办法解决
+//img模式现在效果比较理想，canvas模式现在因分块过多分别重绘性能下降，以后再解决，办法应该是缓存整个大区域再重绘
 
 // splitBlock('阿里云图片服务地址/201607080042354133d66e4e4.jpg',{
 //     "height": 3689,
@@ -19,7 +20,7 @@
 //         console.log('closed');
 //     }
 // });
-
+//例子
 // <script type="text/javascript">
 //     var $container = $('body');
 //     var imgurl = 图片地址
@@ -34,9 +35,44 @@
         return t;
     }
 
+    ///防抖函数
+    ///防止事件函数高频执行,间隔wait毫秒执行
+    ///lossless是否保存最后一次未到间隔时间的执行
+    var _debounce = function (func, wait, lossless) {
+        var lastTimeout, alreadyDo = false;
+        if (typeof lossless == 'undefined')
+            lossless = true;
+        return function () {
+            var context = this,
+                  args = arguments;
+            if (!alreadyDo) {
+                alreadyDo = true;
+                setTimeout(function () { alreadyDo = false }, wait);
+                clearTimeout(lastTimeout);
+                func.apply(context, args);
+            } else if (lossless) {
+                clearTimeout(lastTimeout);
+                lastTimeout = setTimeout(function () {
+                    func.apply(context, args);
+                }, wait);
+            }
+        };
+    }
+    var TouchOrMouseDown, TouchOrMouseUp, TouchOrMouseMove;//事件类型:是touchend还是click;
+    if ('ontouchend' in document) {
+        TouchOrMouseMove = "touchmove";
+        TouchOrMouseDown = "touchstart";
+        TouchOrMouseUp = "touchend";
+        console.log('touch');
+    } else {
+        TouchOrMouseMove = "mousemove";
+        TouchOrMouseDown = "mousedown";
+        TouchOrMouseUp = "mouseup"
+        console.log('mouse');
+    }
     function cvszoom(el, imgLevels, options) {
         var self = this;
-        self.vInterval='undefined';
+        self.vInterval = 'undefined';
         self.$layer = $(el);
         self.imgLevels = imgLevels;
         self.defaults = {
@@ -75,6 +111,7 @@
             self.canvas.style.backgroundImage = 'url(' + imgLevels[0][0][0].src + ')';
             self.canvas.style.backgroundSize = '100% 100%';
         }
+        //瓦片对象三维数组
         self.imgs = [];
         for (var i = 0; i < imgLevels.length; i++) {
             self.imgs[i] = [];
@@ -85,12 +122,16 @@
                 }
             }
         }
+
         i--;
+        //最高放大级别
         self.LevelMax = i;
+
         var ww, hh;
         self.containW = self.$layer.width(); //容器宽
         self.containH = self.$layer.height(); //容器高
-        if (self.options.mode != 'img') {
+
+        if (self.options.mode == 'canvas') {
             self.canvas.width = self.containW;
             self.canvas.height = self.containH;
         } else {
@@ -98,7 +139,7 @@
             self.canvas.style.height = self.options.fullHeight + 'px';
         }
         self.kgb = self.options.fullWidth / self.options.fullHeight; //图片宽高比
-        containkgb = self.containW / self.containH; //容器宽高比
+        var containkgb = self.containW / self.containH; //容器宽高比
         self.kgb > containkgb ? (ww = self.containW * self.options.initSize, hh = ww / self.kgb) : (hh = self.containH * self.options.initSize, ww = hh * self.kgb);
         self.top = (self.containH - hh) / 2; //canvas相对容器位置
         self.left = (self.containW - ww) / 2; //canvas相对容器位置
@@ -108,21 +149,126 @@
         self.canvas.style.top = 0;
         self.canvas.style.left = 0;
         self.$layer.css('overflow', 'hidden');
+
         if (self.$layer.css('position') == 'static') self.$layer.css('position', 'relative');
 
-
         self.scale = 1;
+
         var maxWH = Math.max(self.options.fullWidth, self.options.fullHeight);
         self.maxScaleNum = Math.ceil(Math.max(self.options.fullWidth / self.containW, self.options.fullHeight / self.containH) * self.options.overScaleTimes);
+
         self.curLevel = 0;
         //self.curLevelAllDraw = false;
         self.initdraw();
         self.$layer.append(self.canvas);
         self.$canvas = $(self.canvas);
         self.$canvas.css({ '-moz-transform-origin': '0 0', '-webkit-transform-origin': '0 0', '-ms-transform-origin': '0 0', 'transform-origin': '0 0' });
-        self.$canvas.on('mousedown touchstart', function (e) {
-            self.imgMove(e, self);
+        //缩略图工具初始化
+        if (self.options.thumbnail) {
+            self.initThumbnail();
+        }
+        self.setCss();
+
+
+        //以下是事件绑定
+        self.debounceWaitTime = 40;
+        //图片拖拽
+        self.$canvas.on(TouchOrMouseDown, function (e) {
+            e.preventDefault();
+            if (self.vInterval != "undefined") {
+                clearInterval(self.vInterval);
+                self.vInterval = 'undefined';
+            }
+            //如果是touch事件并且多指则返回
+            if (typeof e.originalEvent.touches !== 'undefined' && e.originalEvent.touches.length > 1) {
+                $(document).off('touchmove touchend');
+                return;
+            }
+            //鼠标mousedown时的坐标；
+            var xy = self.getxy(e);
+            var x0 = xy.x,
+                y0 = xy.y;
+
+            var x1 = x0,
+                y1 = y0,
+                ox0 = x0,
+                oy0 = y0;
+            var starttime = new Date().getTime();
+            //鼠标移动
+            $(document).off(TouchOrMouseMove).on(TouchOrMouseMove, _debounce(function (e) {
+
+                e.preventDefault();
+                //不断的获取mousemove的坐标值
+                var xy = self.getxy(e);
+                var x1 = xy.x,
+                    y1 = xy.y;
+                self.left = self.left + x1 - x0;
+                self.top = self.top + y1 - y0;
+                self.setCss();
+                self.draw();
+                x0 = x1;
+                y0 = y1;
+
+            }, self.debounceWaitTime, false));
+            //鼠标弹起
+            $(document).off(TouchOrMouseUp).on(TouchOrMouseUp, function (e) {
+                //拖拽加速度
+                e.preventDefault();
+                var xy = self.getxy(e);
+                var x1 = xy.x,
+                    y1 = xy.y;
+                self.left = self.left + x1 - x0;
+                self.top = self.top + y1 - y0;
+                self.setCss();
+                self.draw();
+                x0 = x1;
+                y0 = y1;
+
+                var stoptime = new Date().getTime();
+                var v = Math.abs(Math.round(Math.sqrt((x0 - ox0) * (x0 - ox0) + (y0 - oy0) * (y0 - oy0)))) / (stoptime - starttime);
+                if (v > 2) {
+                    var vx = (x0 - ox0) / (stoptime - starttime);
+                    var vy = (y0 - oy0) / (stoptime - starttime);
+                    v = v / 2;
+                    vx = vx / 2;
+                    vy = vy / 2;
+                    var i = 0,
+                        max = 10;
+                    var a = v / max;
+                    var ax = Math.sqrt(a * a * vx * vx / v / v);
+                    var ay = Math.sqrt(a * a * vy * vy / v / v);
+                    self.vInterval = setInterval(function () {
+                        //var oldtime = new Date().getTime();
+                        i++;
+                        if (i >= max) {
+                            clearInterval(self.vInterval);
+                            self.draw();
+                        };
+                        vx > 0 ? vx -= ax * 0.04 : vx += ax * 0.04;
+                        vy > 0 ? vy -= ay * 0.04 : vy += ax * 0.04;
+
+                        self.left += vx * 40;
+                        self.top += vy * 40;
+                        self.setCss();
+                        //console.log(new Date().getTime() - oldtime);
+                    }, 40);
+                }
+
+                $(document).off(TouchOrMouseMove + " " + TouchOrMouseUp);
+
+                //移动端双击放大，没必要，如果不知道手势放大的话，那就不知道怎么缩小了。
+                //$(document).on("touchend", function (e) {
+                //    if (new Date().getTime() - stoptime < 240) {
+                //        e.preventDefault();
+                //        if (typeof e.pageX != 'undefined')
+                //            self.Scale(self.options.scaleNum, { x: e.pageX - self.$layer.offset().left, y: e.pageY - self.$layer.offset().top });
+                //        else
+                //            self.Scale(self.options.scaleNum);
+                //    }
+                //});
+            });
         });
+        //移动端的双指手势放大缩小
         self.$layer.on('touchstart', function (ev) {
             var touchs = ev.originalEvent.touches;
             if (touchs.length != 2) return;
@@ -132,7 +278,8 @@
             var x10 = touchs[1].clientX;
             var y10 = touchs[1].clientY;
             var dis = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
-            self.$layer.off('touchmove').on('touchmove', function (ev) {
+
+            self.$layer.off('touchmove').on('touchmove', _debounce(function (ev) {
                 ev.preventDefault();
                 var touchs = ev.originalEvent.touches;
                 if (touchs.length != 2) {
@@ -144,14 +291,14 @@
                 x10 = touchs[1].clientX;
                 y10 = touchs[1].clientY;
                 var dis2 = Math.sqrt((x10 - x00) * (x10 - x00) + (y10 - y00) * (y10 - y00));
-                if (dis2 - dis > 2) {
-                    self.Scale(1.05);
+                if (dis2 - dis > 1) {
+                    self.Scale(1.1);
                     dis = dis2;
-                } else if (dis2 - dis < -2) {
-                    self.Scale(0.93);
+                } else if (dis2 - dis < -1) {
+                    self.Scale(0.91);
                     dis = dis2;
                 }
-            });
+            }, self.debounceWaitTime, false));
             self.$layer.on('touchend', function (ev) {
                 ev.preventDefault();
                 self.$layer.off('touchmove touchend');
@@ -166,6 +313,7 @@
             else
                 delta > 0 ? self.Scale(1.1) : self.Scale(0.9);
         });
+        //双击放大
         self.$canvas.dblclick(function (e) {
             e.preventDefault();
             if (typeof e.pageX != 'undefined')
@@ -173,258 +321,258 @@
             else
                 self.Scale(self.options.scaleNum);
         });
+        //横屏的变化
         window.onorientationchange = function () {
             setTimeout(function () { self.resize(self); }, 100);
         }
-        self.floorLevelTimeout = 'undefined';
-        //缩略图
-        if (self.options.thumbnail) {
-            var str = '<div class="cvs_thumbnail" >';
-            str += '<div class="huidi"></div>';
-            str += '<div class="shang"></div>';
-            str += '<div class="xia"></div>';
-            str += '<div class="previewbox">';
-            str += '<img src="" draggable="false" />';
-            str += '<div class="brightbox"></div>';
-            str += '<div class="dimbox top"></div>';
-            str += '<div class="dimbox left"></div>';
-            str += '<div class="dimbox right"></div>';
-            str += '<div class="dimbox bottom"></div>';
-            str += '</div>';
-            str += '<span class="btn scalebrightbox"></span>';
-            str += '<span class="btn closeButton">✕</span>';
-            str += '<span class="btn smallButton">-</span>';
-            str += '<span class="btn bigButton">+</span>';
-            str += '</div>';
-            self.$thumbnail = $(str);
-            self.$layer.append(self.$thumbnail);
-            self.$preview = self.$thumbnail.find('.previewbox');
-            self.$scalebrightbox = self.$thumbnail.find('.scalebrightbox');
-            var $brightbox = self.$thumbnail.find('.brightbox');
-            initPreview();
 
-            function initPreview() {
-                self.$thumbnail.css({ width: self.options.thumbnailSize + 'px', height: self.options.thumbnailSize + 'px' });
-                self.$thumbnail.find('.previewbox>img').attr('src', self.imgLevels[0][0][0].src);
-                if (self.kgb > 1) {
-                    self.$preview.h = (self.options.thumbnailSize / self.kgb).toFixed(2);
-                    self.$thumbnail.find('.previewbox').css({ width: self.options.thumbnailSize + 'px', height: self.$preview.h + 'px' });
-                    self.$preview.w = self.options.thumbnailSize;
-                    $brightbox.css('width', self.$preview.w + 'px');
-                    $brightbox.css('height', self.$preview.h + 'px');
-                } else {
-                    self.$preview.w = (self.options.thumbnailSize * self.kgb).toFixed(2);
-                    self.$thumbnail.find('.previewbox').css({ width: self.$preview.w + 'px', height: self.options.thumbnailSize + 'px' });
-                    self.$preview.h = self.options.thumbnailSize;
-                    $brightbox.css('width', self.$preview.w + 'px');
-                    $brightbox.css('height', self.$preview.h + 'px');
-                }
-                self.$scalebrightbox.mw = self.options.thumbnailSize - self.$scalebrightbox.width() - 60;
+    }
+    //缩略图工具初始化
+    cvszoom.prototype.initThumbnail = function () {
+        var self = this;
+        var str = '<div class="cvs_thumbnail" >';
+        str += '<div class="huidi"></div>';
+        str += '<div class="shang"></div>';
+        str += '<div class="xia"></div>';
+        str += '<div class="previewbox">';
+        str += '<img src="" draggable="false" />';
+        str += '<div class="brightbox"></div>';
+        str += '<div class="dimbox top"></div>';
+        str += '<div class="dimbox left"></div>';
+        str += '<div class="dimbox right"></div>';
+        str += '<div class="dimbox bottom"></div>';
+        str += '</div>';
+        str += '<span class="btn scalebrightbox"></span>';
+        str += '<span class="btn closeButton">✕</span>';
+        str += '<span class="btn smallButton">-</span>';
+        str += '<span class="btn bigButton">+</span>';
+        str += '</div>';
+        self.$thumbnail = $(str);
+        self.$layer.append(self.$thumbnail);
+        self.$preview = self.$thumbnail.find('.previewbox');
+        self.$scalebrightbox = self.$thumbnail.find('.scalebrightbox');
+        var $brightbox = self.$thumbnail.find('.brightbox');
+        initPreview();
+        //初始化缩略图
+        function initPreview() {
+            self.$thumbnail.css({ width: self.options.thumbnailSize + 'px', height: self.options.thumbnailSize + 'px' });
+            self.$thumbnail.find('.previewbox>img').attr('src', self.imgLevels[0][0][0].src);
+            if (self.kgb > 1) {
+                self.$preview.h = (self.options.thumbnailSize / self.kgb).toFixed(2);
+                self.$thumbnail.find('.previewbox').css({ width: self.options.thumbnailSize + 'px', height: self.$preview.h + 'px' });
+                self.$preview.w = self.options.thumbnailSize;
+                $brightbox.css('width', self.$preview.w + 'px');
+                $brightbox.css('height', self.$preview.h + 'px');
+            } else {
+                self.$preview.w = (self.options.thumbnailSize * self.kgb).toFixed(2);
+                self.$thumbnail.find('.previewbox').css({ width: self.$preview.w + 'px', height: self.options.thumbnailSize + 'px' });
+                self.$preview.h = self.options.thumbnailSize;
+                $brightbox.css('width', self.$preview.w + 'px');
+                $brightbox.css('height', self.$preview.h + 'px');
+            }
+            self.$scalebrightbox.mw = self.options.thumbnailSize - self.$scalebrightbox.width() - 60;
 
 
-            };
-            self.$thumbnail.find('.shang').on('mousedown touchstart', function (e) { //放大缩小条
+        };
+
+        self.$thumbnail.find('.shang').on(TouchOrMouseDown, function (e) { //缩略图位置拖动
+            e.preventDefault();
+            var xy = self.getxy(e);
+            var x0 = xy.x;
+            var y0 = xy.y;
+            $(document).off(TouchOrMouseMove).on(TouchOrMouseMove, _debounce(function (e) {
                 e.preventDefault();
                 var xy = self.getxy(e);
-                var x0 = xy.x;
-                var y0 = xy.y;
-                $(document).off('mousemove touchmove').on('mousemove touchmove', function (e) {
-                    e.preventDefault();
-                    var xy = self.getxy(e);
-                    var x1 = xy.x;
-                    var y1 = xy.y;
-                    var right = parseFloat(self.$thumbnail.css('right')) - x1 + x0;
-                    var top = parseFloat(self.$thumbnail.css('top')) + y1 - y0;
-                    self.$thumbnail.css({ right: right + 'px', top: top + 'px' });
-                    x0 = x1;
-                    y0 = y1;
-                });
-                //鼠标弹起
-                $(document).off("mouseup touchend").on("mouseup touchend", function (e) {
-                    e.preventDefault();
-                    $(document).off('mousemove mouseup touchmove touchend');
-                });
-            });
-            self.$thumbnail.find('.xia,.scalebrightbox').on('mousedown touchstart', function (e) { //放大缩小条
-                if (self.$scalebrightbox.setCapture) {
-                    self.$scalebrightbox.setCapture();
-                } else if (window.captureEvents) {
-                    window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
-                }
+                var x1 = xy.x;
+                var y1 = xy.y;
+                var right = parseFloat(self.$thumbnail.css('right')) - x1 + x0;
+                var top = parseFloat(self.$thumbnail.css('top')) + y1 - y0;
+                self.$thumbnail.css({ right: right + 'px', top: top + 'px' });
+                x0 = x1;
+                y0 = y1;
+            }, self.debounceWaitTime, false));
+            //鼠标弹起
+            $(document).off(TouchOrMouseUp).on(TouchOrMouseUp, function (e) {
                 e.preventDefault();
-                var x1 = self.$thumbnail.position().left;
-                var x0 = self.getxy(e).x;
-                var left = x0 - x1;
-                if (left < 30) left = 30;
-                else if (left > self.$scalebrightbox.mw + 30) left = self.$scalebrightbox.mw + 30;
-                self.$scalebrightbox.css('left', left + 'px');
-                s = 1 + (self.maxScaleNum - 1) * (left - 30) / self.$scalebrightbox.mw;
+                $(document).off(TouchOrMouseMove + " " + TouchOrMouseUp);
+            });
+        });
+        self.$thumbnail.find('.xia,.scalebrightbox').on(TouchOrMouseDown, function (e) { //放大缩小条
+            e.preventDefault();
+            var x1 = self.$thumbnail.position().left;
+            var x0 = self.getxy(e).x;
+            var left = x0 - x1;
+            if (left < 30) left = 30;
+            else if (left > self.$scalebrightbox.mw + 30) left = self.$scalebrightbox.mw + 30;
+            self.$scalebrightbox.css('left', left + 'px');
+            var s = 1 + (self.maxScaleNum - 1) * (left - 30) / self.$scalebrightbox.mw;
+            self.Scale(s / self.scale);
+            $(document).off(TouchOrMouseMove).on(TouchOrMouseMove, _debounce(function (e) {
+                e.preventDefault();
+                var x1 = self.getxy(e).x;
+                var left = parseFloat(self.$scalebrightbox.css('left')) - 30 + x1 - x0;
+                if (left < 0) left = 0;
+                else if (left > self.$scalebrightbox.mw) left = self.$scalebrightbox.mw;
+                self.$scalebrightbox.css('left', left + 30 + 'px');
+                s = 1 + (self.maxScaleNum - 1) * left / self.$scalebrightbox.mw;
                 self.Scale(s / self.scale);
-                $(document).off('mousemove touchmove').on('mousemove touchmove', function (e) {
-                    e.preventDefault();
-                    var x1 = self.getxy(e).x;
-                    var left = parseFloat(self.$scalebrightbox.css('left')) - 30 + x1 - x0;
-                    if (left < 0) left = 0;
-                    else if (left > self.$scalebrightbox.mw) left = self.$scalebrightbox.mw;
-                    self.$scalebrightbox.css('left', left + 30 + 'px');
-                    s = 1 + (self.maxScaleNum - 1) * left / self.$scalebrightbox.mw;
-                    self.Scale(s / self.scale);
-                    x0 = x1;
-                });
-                //鼠标弹起
-                $(document).off("mouseup touchend").on("mouseup touchend", function (e) {
-                    e.preventDefault();
-                    if (self.$scalebrightbox.releaseCapture) self.$scalebrightbox.releaseCapture();
-                    else if (window.captureEvents) {
-                        window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
-                    }
-                    $(document).off('mousemove mouseup touchmove touchend');
-                });
+                x0 = x1;
+            }, self.debounceWaitTime, false));
+            //鼠标弹起
+            $(document).off(TouchOrMouseUp).on(TouchOrMouseUp, function (e) {
+                e.preventDefault();
+                $(document).off(TouchOrMouseMove + " " + TouchOrMouseUp);
             });
-            self.$thumbnail.find('.previewbox').on('mousedown touchstart', function (e) {
-                //console.log(e);
-                var bbw = parseFloat($brightbox[0].style.width);
-                var bbh = parseFloat($brightbox[0].style.height);
-                var xy = self.getxy(e);
-                var x0 = xy.x,
-                    y0 = xy.y;
-                var $self = $(this);
+        });
+        self.$thumbnail.find('.previewbox').on(TouchOrMouseDown, function (e) {
+            //console.log(e);
+            var bbw = parseFloat($brightbox[0].style.width);
+            var bbh = parseFloat($brightbox[0].style.height);
+            var xy = self.getxy(e);
+            var x0 = xy.x,
+                y0 = xy.y;
+            var $self = $(this);
+            if (self.width < self.containW && self.height < self.containH) return;
+            var thsxy = $self.offset();
+            var left = x0 - thsxy.left - bbw / 2;
+            var top = y0 - thsxy.top - bbh / 2;
+            var oleft = left;
+            var otop = top;
+            //限制白框不出范围
+            self.left = -self.width * left / self.$preview.w;
+            self.top = -self.height * top / self.$preview.h;
+            if (left <= 0) {
+                left = 0;
+                self.left = -self.width * left / self.$preview.w + self.options.whiteBorderSize;
+            } else if (bbw + left >= self.$preview.w) {
+                left = self.$preview.w - bbw;
+                self.left = -self.width * left / self.$preview.w - self.options.whiteBorderSize;
+            }
+            if (top <= 0) {
+                top = 0;
+                self.top = -self.height * top / self.$preview.h + self.options.whiteBorderSize;
+            } else if (bbh + top >= self.$preview.h) {
+                top = self.$preview.h - bbh;
+                self.top = -self.height * top / self.$preview.h - self.options.whiteBorderSize;
+            }
+            $brightbox.css({ top: top + 'px', left: left + 'px' });
+            self.setCss();
+            self.draw();
+            $(document).off(TouchOrMouseMove).on(TouchOrMouseMove, _debounce(function (e) {
+                e.preventDefault();
                 if (self.width < self.containW && self.height < self.containH) return;
-                var thsxy = $self.offset();
-                var left = x0 - thsxy.left - bbw / 2;
-                var top = y0 - thsxy.top - bbh / 2;
-                var oleft = left;
-                var otop = top;
+                var xy = self.getxy(e);
+                var x1 = xy.x,
+                    y1 = xy.y;
+                var left = oleft + x1 - x0;
+                var top = otop + y1 - y0;
                 //限制白框不出范围
-                self.left = -self.width * left / self.$preview.w;
-                self.top = -self.height * top / self.$preview.h;
+
                 if (left <= 0) {
-                    left = 0;
-                    self.left = -self.width * left / self.$preview.w + self.options.whiteBorderSize;
+                    left = -1;
+                    self.left = self.options.whiteBorderSize;
                 } else if (bbw + left >= self.$preview.w) {
-                    left = self.$preview.w - bbw;
-                    self.left = -self.width * left / self.$preview.w - self.options.whiteBorderSize;
+                    left = self.$preview.w - bbw + 1;
+                    self.left = -self.width + self.containW - self.options.whiteBorderSize;
+                } else {
+                    self.left = -self.width * left / self.$preview.w;
                 }
                 if (top <= 0) {
-                    top = 0;
-                    self.top = -self.height * top / self.$preview.h + self.options.whiteBorderSize;
+                    top = -1;
+                    self.top = self.options.whiteBorderSize;
                 } else if (bbh + top >= self.$preview.h) {
-                    top = self.$preview.h - bbh;
-                    self.top = -self.height * top / self.$preview.h - self.options.whiteBorderSize;
+                    top = self.$preview.h - bbh + 1;
+                    self.top = -self.height + self.containH - self.options.whiteBorderSize;
+                } else {
+                    self.top = -self.height * top / self.$preview.h;
                 }
                 $brightbox.css({ top: top + 'px', left: left + 'px' });
                 self.setCss();
                 self.draw();
-                $(document).off('mousemove touchmove').on('mousemove touchmove', function (e) {
-                    e.preventDefault();
-                    if (self.width < self.containW && self.height < self.containH) return;
-                    var xy = self.getxy(e);
-                    var x1 = xy.x,
-                        y1 = xy.y;
-                    var left = oleft + x1 - x0;
-                    var top = otop + y1 - y0;
-                    //限制白框不出范围
-
-                    if (left <= 0) {
-                        left = -1;
-                        self.left = self.options.whiteBorderSize;
-                    } else if (bbw + left >= self.$preview.w) {
-                        left = self.$preview.w - bbw + 1;
-                        self.left = -self.width + self.containW - self.options.whiteBorderSize;
-                    } else {
-                        self.left = -self.width * left / self.$preview.w;
-                    }
-                    if (top <= 0) {
-                        top = -1;
-                        self.top = self.options.whiteBorderSize;
-                    } else if (bbh + top >= self.$preview.h) {
-                        top = self.$preview.h - bbh + 1;
-                        self.top = -self.height + self.containH - self.options.whiteBorderSize;
-                    } else {
-                        self.top = -self.height * top / self.$preview.h;
-                    }
-                    $brightbox.css({ top: top + 'px', left: left + 'px' });
-                    self.setCss();
-                    self.draw();
-                });
-                //鼠标弹起
-                $(document).off("mouseup touchend").on("mouseup touchend", function (e) {
-                    e.preventDefault();
-                    if ($brightbox.releaseCapture) $brightbox.releaseCapture();
-                    else if (window.captureEvents) {
-                        window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
-                    }
-                    $(document).off('mousemove mouseup touchmove touchend');
-                });
+            }, self.debounceWaitTime, false));
+            //鼠标弹起
+            $(document).off(TouchOrMouseUp).on(TouchOrMouseUp, function (e) {
+                e.preventDefault();
+                $(document).off(TouchOrMouseMove + " " + TouchOrMouseUp);
             });
+        });
 
-            self.setThumbnail = function () {
-                scalebrightboxMove();
-                brightboxScale();
-                brightboxMove();
+        self.setThumbnail = function () {
+            scalebrightboxMove();
+            brightboxScale();
+            brightboxMove();
 
-                function scalebrightboxMove() {
-                    var left = (self.scale - 1) * self.$scalebrightbox.mw / (self.maxScaleNum - 1);
-                    self.$scalebrightbox.css({ left: left + 30 + 'px' });
-                    //console.log(left);
-                }
-
-                function brightboxScale() {
-                    var PWS = self.containW / self.width;
-                    if (PWS > 1) PWS = 1;
-                    var PHS = self.containH / self.height;
-                    if (PHS > 1) PHS = 1;
-                    $('.brightbox').css({ width: self.$preview.w * PWS + 'px', height: self.$preview.h * PHS + 'px' });
-                    //console.log(self.$preview.w * PWS,self.$preview.h * PHS);
-                }
-
-                function brightboxMove() {
-                    var bbw = parseFloat($brightbox[0].style.width);
-                    var bbh = parseFloat($brightbox[0].style.height);
-                    var left = -self.$preview.w * self.left / self.width;
-                    var top = -self.$preview.h * self.top / self.height;
-                    if (left <= 0) left = 0;
-                    else if (bbw + left >= self.$preview.w) left = self.$preview.w - bbw;
-                    if (top <= 0) top = 0;
-                    else if (bbh + top >= self.$preview.h) top = self.$preview.h - bbh;
-                    $brightbox.css({ left: left + 'px', top: top + 'px' });
-                    //console.log(left,top);
-                    DimLayerResize();
-                }
-
+            function scalebrightboxMove() {
+                var left = (self.scale - 1) * self.$scalebrightbox.mw / (self.maxScaleNum - 1);
+                self.$scalebrightbox.css({ left: left + 30 + 'px' });
+                //console.log(left);
             }
 
-            function DimLayerResize() { //改变其他灰框大小
+            function brightboxScale() {
+                var PWS = self.containW / self.width;
+                if (PWS > 1) PWS = 1;
+                var PHS = self.containH / self.height;
+                if (PHS > 1) PHS = 1;
+                $('.brightbox').css({ width: self.$preview.w * PWS + 'px', height: self.$preview.h * PHS + 'px' });
+                //console.log(self.$preview.w * PWS,self.$preview.h * PHS);
+            }
+
+            function brightboxMove() {
                 var bbw = parseFloat($brightbox[0].style.width);
                 var bbh = parseFloat($brightbox[0].style.height);
-                var rl = (parseFloat($brightbox.css('left')) + bbw) + 'px';
-                var rt = $brightbox.css('top');
-                var rw = (self.$preview.w - (parseFloat($brightbox.css('left')) + bbw)) + 'px';
-                var rh = $brightbox[0].style.height;
-                var ll = $brightbox.css('left');
-                var bt = (parseFloat($brightbox.css('top')) + bbh) + 'px';
-                var bh = (self.$preview.h - (parseFloat($brightbox.css('top')) + bbh)) + 'px';
-                //console.log(rl, rt, rw, rh, ll, bt, bh);
-                self.$thumbnail.find(".dimbox.top").css({ left: 0, top: 0, width: '100%', height: rt });
-                self.$thumbnail.find(".dimbox.left").css({ left: 0, top: rt, width: ll, height: rh });
-                self.$thumbnail.find(".dimbox.right").css({ left: rl, top: rt, width: rw, height: rh });
-                self.$thumbnail.find(".dimbox.bottom").css({ left: 0, top: bt, width: '100%', height: bh });
+                var left = -self.$preview.w * self.left / self.width;
+                var top = -self.$preview.h * self.top / self.height;
+                if (left <= 0) left = 0;
+                else if (bbw + left >= self.$preview.w) left = self.$preview.w - bbw;
+                if (top <= 0) top = 0;
+                else if (bbh + top >= self.$preview.h) top = self.$preview.h - bbh;
+                $brightbox.css({ left: left + 'px', top: top + 'px' });
+                //console.log(left,top);
+                DimLayerResize();
             }
 
-            $('.bigButton').click(function () {
-                self.Scale(self.options.scaleNum);
-            });
-            $('.smallButton').click(function () {
-                self.Scale(1 / self.options.scaleNum)
-            });
-            $('.closeButton').click(function () {
-                self.destroy();
-            });
-            //以上是缩略图视窗相关
         }
-        self.setCss();
 
+        function DimLayerResize() { //改变其他灰框大小
+            var bbw = parseFloat($brightbox[0].style.width);
+            var bbh = parseFloat($brightbox[0].style.height);
+            var rl = (parseFloat($brightbox.css('left')) + bbw) + 'px';
+            var rt = $brightbox.css('top');
+            var rw = (self.$preview.w - (parseFloat($brightbox.css('left')) + bbw)) + 'px';
+            var rh = $brightbox[0].style.height;
+            var ll = $brightbox.css('left');
+            var bt = (parseFloat($brightbox.css('top')) + bbh) + 'px';
+            var bh = (self.$preview.h - (parseFloat($brightbox.css('top')) + bbh)) + 'px';
+            //console.log(rl, rt, rw, rh, ll, bt, bh);
+            self.$thumbnail.find(".dimbox.top").css({ left: 0, top: 0, width: '100%', height: rt });
+            self.$thumbnail.find(".dimbox.left").css({ left: 0, top: rt, width: ll, height: rh });
+            self.$thumbnail.find(".dimbox.right").css({ left: rl, top: rt, width: rw, height: rh });
+            self.$thumbnail.find(".dimbox.bottom").css({ left: 0, top: bt, width: '100%', height: bh });
+        }
+
+        $('.bigButton').click(function () {
+            self.Scale(self.options.scaleNum);
+        });
+        $('.smallButton').click(function () {
+            self.Scale(1 / self.options.scaleNum)
+        });
+        $('.closeButton').click(function () {
+            self.destroy();
+        });
+        //以上是缩略图视窗相关
     }
+    //初始化图
+    cvszoom.prototype.initdraw = function () {
+        var self = this;
+        for (var wi = 0; wi < self.imgLevels[0].length; wi++) {
+            for (var yi = 0; yi < self.imgLevels[0][wi].length; yi++) {
+                (function (wi, yi) {
+                    self.imgload(0, wi, yi);
+                })(wi, yi)
+            }
+        }
+    };
+    //改变位置等
     cvszoom.prototype.setCss = function () {
         var self = this;
         //图片不允许超出边界,左右上下留白
@@ -445,7 +593,7 @@
             self.top > self.options.whiteBorderSize ? self.top = self.options.whiteBorderSize : (self.top < -temp ? self.top = -temp : 1);
         }
 
-        if (self.options.mode == 'img') {
+        if (self.options.mode != 'canvas') {
             if (self.canTransform) {
                 transform(self.$canvas, 'matrix(' + self.width / self.options.fullWidth + ',0,0,' + self.height / self.options.fullHeight + ',' + self.left + ',' + self.top + ')');
             } else {
@@ -488,20 +636,9 @@
             }
         }
     };
-
-    cvszoom.prototype.initdraw = function () {
-        var self = this;
-        for (var wi = 0; wi < self.imgLevels[0].length; wi++) {
-            for (var yi = 0; yi < self.imgLevels[0][wi].length; yi++) {
-                (function (wi, yi) {
-                    self.imgload(0, wi, yi);
-                })(wi, yi)
-            }
-        }
-    };
     cvszoom.prototype.imgload = function (i, wi, yi) {
         var self = this;
-        if (typeof self.imgs[i][wi][yi].complete == 'undefined') {
+        if (typeof self.imgs[i][wi][yi].alreadyLoad == 'undefined') {
             self.imgs[i][wi][yi] = new Image();
             self.imgs[i][wi][yi].onload = function () {
                 if (self.options.mode == 'canvas') {
@@ -516,10 +653,11 @@
                     this.style.zIndex = i;
                     self.canvas.appendChild(this);
                 }
+                this.alreadyLoad = true;
             };
             self.imgs[i][wi][yi].src = self.imgLevels[i][wi][yi].src;
-        } else if (self.imgs[i][wi][yi].complete == true) {
-            if (self.options.mode != 'img') {
+        } else if (self.imgs[i][wi][yi].alreadyLoad == true) {
+            if (self.options.mode == 'canvas') {
                 self.imgs[i][wi][yi].onload();
             }
         }
@@ -550,102 +688,22 @@
         self.left = newleft;
         self.top = newtop;
         self.setCss();
-
+        //函数节流
         if (self.floorLevelTimeout != 'undefined') {
             clearTimeout(self.floorLevelTimeout);
             self.floorLevelTimeout = 'undefined';
         }
         self.floorLevelTimeout = setTimeout(function () {
             self.draw(LevelNew);
-        }, 300); //利用延迟解决连续变级太快，浪费流量读取低级图层的问题
+        }, 300); //函数节流、利用延迟解决连续变级太快，浪费流量读取低级图层的问题
     }
     //判断两个矩形有没有相交
     cvszoom.prototype.rectTest = function (rect1, rect2) {
         return rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x && rect1.y < rect2.y + rect2.h && rect1.y + rect1.h > rect2.y;
     }
-    //图片的拖拽
-    cvszoom.prototype.imgMove = function (e, self) {
-        e.preventDefault();
-        this.setCapture ? this.setCapture() : window.captureEvents && window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
-        if (self.vInterval != "undefined") {
-            clearInterval(self.vInterval);
-            self.vInterval='undefined';
-        }
-        if (typeof e.originalEvent.touches !== 'undefined' && e.originalEvent.touches.length > 1) {
-            $(document).off('touchmove touchend');
-            return;
-        }
-        //鼠标mousedown时的坐标；
-        var xy = self.getxy(e);
-        var x0 = xy.x,
-            y0 = xy.y;
-        //console.log(x0+","+y0+"|");
-        var x1 = x0,
-            y1 = y0,
-            ox0 = x0,
-            oy0 = y0;
-        var starttime = new Date().getTime();
-        //鼠标移动
-        $(document).on('mousemove touchmove', function (e) {
-
-            e.preventDefault();
-            //不断的获取mousemove的坐标值
-            var xy = self.getxy(e);
-            var x1 = xy.x,
-                y1 = xy.y;
-            self.left = self.left + x1 - x0;
-            self.top = self.top + y1 - y0;
-            self.setCss();
-            self.draw();
-            x0 = x1;
-            y0 = y1;
-
-        });
-        //鼠标弹起
-        $(document).on("mouseup touchend", function (e) {
-            //拖拽加速度
-            e.preventDefault();
-            var stoptime = new Date().getTime();
-            var v = Math.abs(Math.round(Math.sqrt((x0 - ox0) * (x0 - ox0) + (y0 - oy0) * (y0 - oy0)))) / (stoptime - starttime);
-            if (v > 2) {
-                vx = (x0 - ox0) / (stoptime - starttime);
-                vy = (y0 - oy0) / (stoptime - starttime);
-                v = v / 2;
-                vx = vx / 2;
-                vy = vy / 2;
-                var i = 0,
-                    max = 10;
-                var a = v / max;
-                ax = Math.sqrt(a * a * vx * vx / v / v);
-                ay = Math.sqrt(a * a * vy * vy / v / v);
-                self.vInterval = setInterval(function () {
-                    //var oldtime = new Date().getTime();
-                    i++;
-                    if (i >= max) {
-                        clearInterval(self.vInterval);
-                        self.draw();
-                    };
-                    x = vx * 40;
-                    y = vy * 40;
-                    vx > 0 ? vx -= ax * 0.04 : vx += ax * 0.04;
-                    vy > 0 ? vy -= ay * 0.04 : vy += ax * 0.04;
-
-                    self.left += x;
-                    self.top += y;
-                    self.setCss();
-                    //console.log(new Date().getTime() - oldtime);
-                }, 40);
-            }
-
-            if (self.$layer.releaseCapture) { self.$layer.releaseCapture(); } else if (window.captureEvents) {
-                window.captureEvents(Event.MOUSEMOVE | Event.MOUSEUP);
-            }
-            $(document).off('mousemove mouseup touchmove touchend');
-            flag = false;
-        });
-    };
+    //大小变化时的重绘
     cvszoom.prototype.resize = function (self) {
-        if (self.options.mode == 'img') {
+        if (self.options.mode != 'canvas') {
             var newW = self.$layer.width();
             var newH = self.$layer.height();
             var bl = self.containW / newW;
@@ -659,41 +717,50 @@
             self.draw();
         } else { }
     }
+    //销毁自己
     cvszoom.prototype.destroy = function () {
         var self = this;
         self.$layer.off('mousedown touchstart mousewheel DOMMouseScroll');
         self.$canvas.remove();
         if (self.options.thumbnail) self.$thumbnail.remove();
         self.closed();
-        delete self;
     }
+    //destroy放大窗口的回调函数，可根据需要在子类中重写
     cvszoom.prototype.closed = function () {
         console.log('closed');
     }
+    //针对不同的事件类型取得x,y坐标
     cvszoom.prototype.getxy = function (event) {
+        var temp;
         if (typeof event.originalEvent !== 'undefined')
-            event = event.originalEvent;
-
-        if (typeof event.targetTouches !== 'undefined') {
-            return {
-                x: event.targetTouches[0].clientX,
-                y: event.targetTouches[0].clientY
-            };
-        }
-
-        if (typeof event.targetTouches === 'undefined') {
-            if (typeof event.clientX !== 'undefined') {
+            temp = event.originalEvent;
+        else
+            temp = event;
+        if (typeof temp.targetTouches !== 'undefined') {
+            if (temp.targetTouches.length > 0) {
                 return {
-                    x: event.clientX,
-                    y: event.clientY
-                };
-            } else if (typeof event.pageX !== 'undefined') {
-                return {
-                    x: event.pageX,
-                    y: event.pageY
+                    x: temp.targetTouches[0].clientX,
+                    y: temp.targetTouches[0].clientY
                 };
             }
-
+            else if (temp.changedTouches.length > 0) {
+                return {
+                    x: temp.changedTouches[0].clientX,
+                    y: temp.changedTouches[0].clientY
+                };
+            }
+        }else {
+            if (typeof temp.clientX !== 'undefined') {
+                return {
+                    x: temp.clientX,
+                    y: temp.clientY
+                };
+            } else if (typeof temp.pageX !== 'undefined') {
+                return {
+                    x: temp.pageX,
+                    y: temp.pageY
+                };
+            }
         }
     }
 })(jQuery, window, document);
@@ -723,6 +790,7 @@ function splitBlock(imgurl, data, options, done) {
     var hbn; //高，当前级别块数
     var wbn; //宽，当前级别块数
     var bn = Math.round(Math.sqrt(maxBlockNum / bl)); //高，当前级别块数
+    var wBlockPx, hBlockPx;
     for (var i = maxScaleTimes; i >= 1; i--) {
         Levels[i] = [];
         var p = Math.ceil(100 / (Math.pow(1.8, maxScaleTimes - i)));
